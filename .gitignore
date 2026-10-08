@@ -2,3 +2,7 @@
 __pycache__/
 *.wav
 *.mp3
+config.js
+node_modules/
+.pytest_cache/
+tests/fixtures/*.wav

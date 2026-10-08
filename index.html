@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>영어 말하기 녹음</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><h1>3학년 영어B 말하기 포트폴리오</h1></header>
+<main id="main">
+  <div id="live" aria-live="polite" class="live"></div>
+
+  <section id="screen-entry" class="screen">
+    <h2 tabindex="-1">입장</h2>
+    <form id="entry-form">
+      <fieldset>
+        <legend>반</legend>
+        <label><input type="radio" name="cls" value="1" required> 1반</label>
+        <label><input type="radio" name="cls" value="2"> 2반</label>
+        <label><input type="radio" name="cls" value="3"> 3반</label>
+        <label><input type="radio" name="cls" value="4"> 4반</label>
+        <label><input type="radio" name="cls" value="5"> 5반</label>
+        <label><input type="radio" name="cls" value="6"> 6반</label>
+      </fieldset>
+      <p><label>번호 <input type="number" name="num" min="1" max="40" required></label></p>
+      <p><label>이름 <input type="text" name="name" autocomplete="off" required></label></p>
+      <p id="entry-error" class="error"></p>
+      <button type="submit">확인</button>
+    </form>
+  </section>
+
+  <section id="screen-mode" class="screen" hidden>
+    <h2 tabindex="-1">평가 선택</h2>
+    <p id="mode-greeting"></p>
+    <p id="mode-note"></p>
+    <p>
+      <button type="button" id="btn-practice">모의 평가</button>
+      <button type="button" id="btn-exam" disabled>본 평가</button>
+    </p>
+  </section>
+
+  <section id="screen-mic" class="screen" hidden>
+    <h2 tabindex="-1">마이크 준비</h2>
+    <p>헤드폰을 연결하고 [마이크 테스트]를 누르세요. 3초 동안 녹음한 뒤 자동으로 들려줍니다.</p>
+    <p id="mic-status"></p>
+    <p>
+      <button type="button" id="btn-mic-test">마이크 테스트</button>
+      <button type="button" id="btn-mic-next" disabled>시작</button>
+    </p>
+  </section>
+
+  <section id="screen-record" class="screen" hidden>
+    <h2 tabindex="-1" id="record-title"></h2>
+    <p id="record-source"></p>
+    <p><button type="button" id="btn-play-all">전체 듣기</button></p>
+    <ol id="unit-list" class="units"></ol>
+    <p>
+      <button type="button" id="btn-prev-dialogue" hidden>대화 1로 돌아가기</button>
+      <button type="button" id="btn-next" disabled></button>
+    </p>
+  </section>
+
+  <section id="screen-submit" class="screen" hidden>
+    <h2 tabindex="-1">제출</h2>
+    <ul id="submit-summary"></ul>
+    <p id="submit-status"></p>
+    <p>
+      <button type="button" id="btn-back-record">녹음으로 돌아가기</button>
+      <button type="button" id="btn-submit">제출</button>
+    </p>
+  </section>
+
+  <section id="screen-done" class="screen" hidden>
+    <h2 tabindex="-1">제출 완료</h2>
+    <p id="done-text"></p>
+  </section>
+</main>
+
+<dialog id="confirm-dialog" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <h2 id="confirm-title">제출 확인</h2>
+    <p>제출하면 다시 녹음할 수 없습니다. 제출할까요?</p>
+    <p><button value="cancel">취소</button> <button value="ok" id="confirm-ok">제출</button></p>
+  </form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
