@@ -85,26 +85,25 @@ Supabase (학교 계정 프로젝트)
 
 페이지에 노출되는 것은 프로젝트 URL과 anon 키뿐이다. 서비스 키와 ElevenLabs 키는 로컬 `.env`(gitignore)에 둔다. 학생 이름은 저장소에 들어가지 않는다.
 
-## 5. 대화문 데이터 (`dialogues.js`)
+## 5. 대화문 데이터 (`data/dialogues.json`)
 
-```js
-const DIALOGUES = [
-  { id: "L5-1", title: "Jim Abbott", source: "Lesson 5 / Listen and Speak 1 B / p.86",
-    audio: "L5-1.mp3",
-    units: [ { n: 1, speaker: "A", text: "Jiho, what are you reading?" }, ... ],
-    expressions: [ { n: 1, unit: 1, text: "Jiho, what are you reading?" }, ... ] // 항상 10개
-  }, ...
-];
+```json
+[{ "id": "L5-1", "title": "Jim Abbott", "source": "Lesson 5 / Listen and Speak 1 B / p.86",
+   "audio": "L5-1.mp3",
+   "units": [ { "n": 1, "speaker": "A", "text": "Jiho, what are you reading?" } ],
+   "expressions": [ { "n": 1, "unit": 1, "text": "Jiho, what are you reading?" } ] }]
 ```
+
+`expressions`는 항상 10개다. `scripts/build_dialogues.py`가 턴 CSV와 분할표로 생성한다.
 
 - `units`는 녹음 단위다. 대화 8편은 턴 그대로(8·9·10개). 독백(ID `L6-3`, 미술관 안내)은 문장 단위이며 "Hello, students!"는 다음 문장과 합쳐 7개 단위로 한다.
 - `expressions`는 채점 단위로 항상 10개다. 10턴 편은 턴=표현. 9턴 편은 가장 긴 턴 1개를 문장 경계에서 둘로, 8턴 편은 긴 턴 2개를 둘로 나눈다. 독백은 긴 문장을 절 경계에서 나눠 10개를 만든다. 각 표현은 정확히 하나의 unit에 속하고, 한 unit의 표현들을 이어 붙이면 unit 원문이 된다.
-- 원문은 `3. 과제 자료/2026 초안/2026 말하기 대화문 모음.txt`와 `3. 교과서/2026/듣기 대본.txt` 103행을 그대로 쓴다. `−58℃`처럼 기호가 든 문장은 표시용 원문과 채점용 정규화 텍스트("minus fifty eight degrees" 등 허용 변형 목록)를 함께 둔다.
+- 원문은 `3. 과제 자료/2026 초안/2026 말하기 대화문 모음.txt`와 `3. 교과서/2026/듣기 대본.txt` 103행을 그대로 쓴다. `−58℃`, `1995`, `$25`처럼 숫자·기호가 든 문장은 데이터에 원문만 두고, 채점기의 정규화 함수가 대본과 전사 양쪽을 같은 단어열("minus fifty eight degrees" 등)로 바꾼다. 앱과 채점기가 같은 JSON 파일을 읽는다.
 - 표현 10개 지정 결과는 `scripts/export_expressions.py`로 표(Markdown)를 뽑아 학생 안내문에 싣는다.
 
 ## 6. 학생 앱
 
-단일 페이지 `index.html` + `app.js` + `styles.css` + `dialogues.js`. 외부 의존은 supabase-js(jsdelivr 고정 버전)와 Google Fonts만.
+단일 페이지 `index.html` + `app.js` + `styles.css` + `lib/` + `data/dialogues.json`. 외부 의존은 supabase-js(jsdelivr 고정 버전)와 Google Fonts만.
 
 ### 6.1 화면 흐름
 
@@ -151,7 +150,7 @@ const DIALOGUES = [
 
 ### 7.1 채점 알고리즘 (`score.py`)
 
-1. 정규화: 소문자, 구두점 제거, 숫자·기호는 `dialogues.js`의 허용 변형으로 치환, 축약형(`I'm`/`I am`) 양쪽 허용.
+1. 정규화: 소문자, 구두점 제거, 숫자·기호는 정규화 함수가 단어로 치환(`1995` → nineteen ninety five, `−58℃` → minus fifty eight degrees, `$25` → twenty five dollars, `5th` → fifth), 축약형(`I'm`/`I am`) 양쪽 허용.
 2. 정렬: 전사 단어열과 대본 단어열을 Needleman-Wunsch로 정렬해 대본 단어마다 일치·대체·삭제를 표시한다. 표현 n의 단어 집합에 대해 `match_ratio = 일치 단어 / 대본 단어`.
 3. 유창성: 표현에 정렬된 전사 단어들의 타임스탬프에서 `max_gap`(연속 단어 사이 최장 간격, 초)과 `wpm`(단어 수 ÷ 첫 단어 시작부터 마지막 단어 끝까지 분)을 구한다. 단위 경계(`turn_offsets`)를 넘는 간격은 세지 않는다.
 4. 판정: `match_ratio ≥ 0.75 and max_gap ≤ 2.0 and wpm ≥ 60`이면 만족. 세 임계값은 `scoring.json`에 있고 기본값은 위와 같다. 정렬된 단어가 0개면 불만족.
