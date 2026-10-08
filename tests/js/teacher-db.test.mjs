@@ -66,10 +66,38 @@ test("체크인은 DB 교사 표시와 정규화된 이름을 확인한다", asy
   assert.equal((await rpc("check_in", [1, 40, ""])).is_teacher, false);
 });
 
+test("닫힌 반은 학생 입장을 막고 교사에게는 관리 화면 진입을 허용한다", async () => {
+  assert.deepEqual(await rpc("check_in", student), {
+    ok: false, reason: "class_closed", class_open: false, exam_open: false,
+    submitted: true, is_teacher: false,
+  });
+  const result = await rpc("check_in");
+  assert.equal(result.ok, true);
+  assert.equal(result.is_teacher, true);
+  assert.equal(result.class_open, false);
+  assert.equal(result.reason, null);
+  assert.deepEqual(await rpc("check_in", [1, 40, "오답"]), {
+    ok: false, reason: null, class_open: null, exam_open: null,
+    submitted: null, is_teacher: false,
+  });
+});
+
+test("설정 없는 반도 닫힘으로 처리하며 교사는 설정 없이 입장한다", async () => {
+  const result = await rpc("check_in", [2, 1, "학생 셋"]);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "class_closed");
+  assert.equal(result.class_open, false);
+  assert.equal(result.exam_open, false);
+  assert.equal((await rpc("check_in", [3, 1, "교사 둘"])).ok, true);
+  const missing = (await rpc("teacher_dashboard")).classes.find(c => c.class === 2);
+  assert.equal(missing.class_open, false);
+});
+
 test("대시보드는 전체 학생·미제출·반별 상태를 반환하고 교사를 제외한다", async () => {
   const { classes } = await rpc("teacher_dashboard");
   assert.deepEqual(classes.map(c => c.class), [1, 2]);
   assert.equal(classes[0].exam_open, false);
+  assert.equal(classes[0].class_open, false);
   assert.deepEqual(classes[0].students.map(s => s.number), [1, 2]);
   assert.deepEqual(classes[0].students[0].files, ["exam/a.wav", "exam/b.wav"]);
   assert.deepEqual(classes[0].students[0].durations, [12, 13]);
@@ -84,8 +112,83 @@ test("학생·잘못된 교사 정보로 조회 및 설정 변경이 차단된�
   for (const identity of [student, [1,40,"오답"], [null,null,null]]) {
     await assert.rejects(rpc("teacher_dashboard", identity), { code: "42501" });
     await assert.rejects(rpc("teacher_set_exam_open", [...identity,1,true]), { code: "42501" });
+    await assert.rejects(rpc("teacher_set_class_open", [...identity,1,true]), { code: "42501" });
   }
+  await assert.rejects(db.query("update public.settings set exam_open = true where class = 1"), { code: "42501" });
+  await assert.rejects(db.query("insert into public.settings values (2,true)"), { code: "42501" });
   assert.equal((await rpc("check_in", student)).exam_open, false);
+});
+
+test("교사는 닫힌 반에서 새 RPC로 입장을 열고 다시 닫을 수 있다", async () => {
+  try {
+    assert.deepEqual(await rpc("teacher_set_class_open", [...teacher,1,true]), {
+      class: 1, class_open: true, exam_open: true,
+    });
+    const result = await rpc("check_in", student);
+    assert.equal(result.ok, true);
+    assert.equal(result.reason, null);
+    assert.equal(result.class_open, true);
+    assert.equal(result.exam_open, true);
+    const dashboard = (await rpc("teacher_dashboard")).classes[0];
+    assert.equal(dashboard.class_open, true);
+    assert.equal(dashboard.exam_open, true);
+    for (const args of [[999,true], [3,true], [1,null]]) {
+      await assert.rejects(rpc("teacher_set_class_open", [...teacher,...args]), { code: "22023" });
+    }
+  } finally {
+    await rpc("teacher_set_class_open", [...teacher,1,false]);
+  }
+  assert.equal((await rpc("check_in", student)).reason, "class_closed");
+  assert.equal((await rpc("check_in")).ok, true);
+});
+
+test("연습과 실전 제출은 설정 없음·마감 시 차단되고 개방 후에만 허용된다", async () => {
+  const exam = () => db.query(`insert into public.submissions(class,number,name,dialogue_ids,turn_offsets,files,durations)
+    values (2,1,'학생 셋',array['L5-1','L6-1'],'[]',array['exam/test-a.wav','exam/test-b.wav'],array[1,1])`);
+  const practice = (name = "학생 셋") => db.query(`insert into public.practice_submissions(class,number,name,dialogue_id,turn_offsets,file,duration)
+    values (2,1,$1,'L5-1','[]','practice/test.wav',1)`, [name]);
+  try {
+    await assert.rejects(exam(), { code: "42501" });
+    await assert.rejects(practice(), { code: "42501" });
+    await rpc("teacher_set_class_open", [...teacher,2,true]);
+    await assert.rejects(practice("틀린 이름"), { code: "42501" });
+    await exam();
+    await practice();
+    await practice();
+    await rpc("teacher_set_class_open", [...teacher,2,false]);
+    await assert.rejects(exam(), { code: "42501" });
+    await assert.rejects(practice(), { code: "42501" });
+  } finally {
+    await db.exec("reset role; delete from public.submissions where class = 2; delete from public.practice_submissions where class = 2; delete from public.settings where class = 2; set role anon;");
+  }
+});
+
+test("녹음 업로드는 연습·실전의 실제 반 경로와 현재 개방 상태를 검사한다", async () => {
+  const paths = [
+    "exam/3-02/3-02-01/550e8400-e29b-41d4-a716-446655440000/1_L5-1.wav",
+    "practice/3-02/3-02-01/20261009T123456Z_L5-1.wav",
+  ];
+  const upload = (path, bucket = "recordings") => db.query(
+    "insert into storage.objects(bucket_id,name) values ($1,$2)", [bucket,path]);
+  try {
+    for (const path of paths) await assert.rejects(upload(path), { code: "42501" });
+    await rpc("teacher_set_class_open", [...teacher,2,true]);
+    for (const path of paths) await upload(path);
+    for (const path of [
+      "exam/3-01/3-01-01/attempt/1_L5-1.wav",
+      "practice/3-01/3-01-01/20261009_L5-1.wav",
+      "exam/3-02/3-01-01/attempt/1_L5-1.wav",
+      "practice/3-99/3-99-01/20261009_L5-1.wav",
+      "exam/a.wav", "practice/x/file.wav", "practice/3-x/3-x-01/file.wav",
+      "practice/3-2147483648/3-2147483648-01/file.wav",
+      "practice/3-02/3-02-01/../../3-01/file.wav",
+    ]) await assert.rejects(upload(path), { code: "42501" });
+    await assert.rejects(upload(paths[0], "audio"), { code: "42501" });
+    await rpc("teacher_set_class_open", [...teacher,2,false]);
+    for (const path of paths) await assert.rejects(upload(path), { code: "42501" });
+  } finally {
+    await db.exec("reset role; delete from storage.objects where name like '%/3-02/%'; delete from public.settings where class = 2; set role anon;");
+  }
 });
 
 test("교사 설정은 실제 학생이 있는 반만 생성·변경한다", async () => {
@@ -186,6 +289,7 @@ test("교사 표시 해제는 다음 RPC·Storage 요청부터 적용된다", as
   assert.equal((await rpc("check_in")).is_teacher, false);
   await assert.rejects(rpc("teacher_dashboard"), { code: "42501" });
   await assert.rejects(rpc("teacher_set_exam_open", [...teacher,1,true]), { code: "42501" });
+  await assert.rejects(rpc("teacher_set_class_open", [...teacher,1,true]), { code: "42501" });
   await assert.rejects(rpc("teacher_return_submission", [...teacher,"00000000-0000-0000-0000-000000000001"]), { code: "42501" });
   assert.deepEqual(await recordings(header()), []);
 });

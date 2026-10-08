@@ -39,12 +39,14 @@ def row(**extra):
 
 def test_check_in_name_with_spaces(anon, svc):
     r = anon.rpc("check_in", {"p_class": 0, "p_number": 99, "p_name": "테스트  학생"}).execute()
-    assert r.data["ok"] is True and r.data["exam_open"] is False and r.data["submitted"] is False
+    assert r.data["ok"] is False and r.data["class_open"] is False
+    assert r.data["reason"] == "class_closed"
+    assert r.data["exam_open"] is False and r.data["submitted"] is False
 
 
 def test_check_in_fullwidth_space(anon, svc):
     r = anon.rpc("check_in", {"p_class": 0, "p_number": 99, "p_name": "테스트　학생"}).execute()
-    assert r.data["ok"] is True
+    assert r.data["ok"] is False and r.data["reason"] == "class_closed"
 
 
 def test_check_in_wrong_name(anon, svc):
@@ -76,6 +78,15 @@ def test_insert_rejected_when_closed(anon, svc):
     assert rls_denied(e.value)
 
 
+def test_practice_insert_rejected_when_closed(anon, svc):
+    with pytest.raises(Exception) as e:
+        anon.table("practice_submissions").insert(
+            {**TEST, "dialogue_id": "L5-1", "turn_offsets": [],
+             "file": f"practice/x/{uuid.uuid4()}.wav", "duration": 1},
+            returning="minimal").execute()
+    assert rls_denied(e.value)
+
+
 def test_insert_once_when_open_then_duplicate_rejected(anon, svc):
     svc.table("settings").update({"exam_open": True}).eq("class", 0).execute()
     anon.table("submissions").insert(row(), returning="minimal").execute()
@@ -84,6 +95,7 @@ def test_insert_once_when_open_then_duplicate_rejected(anon, svc):
     assert "23505" in str(e.value) or "duplicate" in str(e.value).lower()
     r = anon.rpc("check_in", {"p_class": 0, "p_number": 99, "p_name": "테스트 학생"}).execute()
     assert r.data["submitted"] is True
+    assert r.data["ok"] is True and r.data["class_open"] is True
 
 
 def test_practice_insert_allowed_many_times(anon, svc):

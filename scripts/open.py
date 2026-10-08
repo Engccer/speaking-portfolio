@@ -1,4 +1,4 @@
-"""본 평가 개방. 사용: python scripts/open.py 4 6"""
+"""학급 입장 열기(모의·본 평가). 사용: python scripts/open.py 4 6"""
 import sys
 from common import service_client
 

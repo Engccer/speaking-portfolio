@@ -8,7 +8,7 @@
 
 범위 안:
 
-- 정적 웹앱: 학생 입장·모의 평가·본 평가·제출, 교사 제출 현황·녹음 재생·반별 평가 개방.
+- 정적 웹앱: 학생 입장·모의 평가·본 평가·제출, 교사 제출 현황·녹음 재생·반별 학급 입장 개방.
 - Supabase 프로젝트: 명렬·제출 기록·녹음 파일·공식 음원 보관.
 - 교사 스크립트(Python, 로컬): 다운로드, 전사, 채점, 개방 제어, 재응시 초기화.
 - 대화문 9편의 데이터와 표현 10개 지정.
@@ -32,8 +32,8 @@
 | 최종 점수 | 두 대화 점수 평균을 반올림(0.5는 올림)한 정수. 평가계획 급간 안에 떨어짐 |
 | 공식 음원 | Supabase Storage 비공개 버킷. 저장소에 커밋하지 않음 |
 | 일정 | 첫 평가 304·306반 10/12(월) 유지. 학생 앱을 주말까지 완성 |
-| 모의 평가 | 1편 무작위, 본 평가와 같은 화면, 재제출 가능, 항상 개방 |
-| 본 평가 개방 | 반별 개방 플래그를 교사 스크립트로 켜고 끔 |
+| 모의 평가 | 1편 무작위, 본 평가와 같은 화면, 재제출 가능, 학급 입장이 열려 있을 때 참여 |
+| 학급 입장 | 대시보드 또는 교사 스크립트로 반별 모의·본 평가를 함께 열고 닫음 |
 | 저장소 | 로컬 `Windows-Projects\Education\speaking-portfolio`, GitHub `Engccer/speaking-portfolio` 공개, Pages 배포 |
 | Supabase 계정 | 학교 Google 계정(`sinmyung.sen.ms.kr` 도메인)으로 새 프로젝트 |
 
@@ -63,11 +63,11 @@ Supabase (학교 계정 프로젝트)
 
 `students`: `class smallint`, `number smallint`, `name text`, `is_teacher boolean default false`, PK(class, number). anon 직접 조회는 차단한다. 명렬은 `플랭스쿨 연습 기록/<N>반.csv`의 명렬 열에서 교사 스크립트로 적재한다. 기존 1반 40번 행에 교사 표시를 두고, 이름은 서버 명렬에서 관리한다.
 
-`settings`: `class smallint PK`, `exam_open boolean default false`. anon 접근 차단, 함수로만 읽는다.
+`settings`: `class smallint PK`, `exam_open boolean default false`. 기존 열 이름을 유지하며 값은 모의·본 평가 공통 학급 입장 상태를 뜻한다. API는 `class_open`을 사용하고 `exam_open`은 호환 별칭으로 유지한다. anon 접근 차단, 함수로만 읽는다.
 
 `submissions`: `id uuid`, `class`, `number`, `name`, `dialogue_ids text[2]`, `turn_offsets jsonb`, `files text[2]`, `durations numeric[2]`, `user_agent text`, `submitted_at timestamptz default now()`. UNIQUE(class, number). RLS: anon INSERT만 허용, SELECT·UPDATE·DELETE 불허. INSERT 정책은 `students`에 같은 (class, number, name)이 있고 `settings.exam_open`이 참일 때만 통과한다.
 
-`practice_submissions`: `id uuid`, `class`, `number`, `name`, `dialogue_id text`, `turn_offsets jsonb`, `file text`, `duration numeric`, `submitted_at`. 유일 제약 없음. RLS: anon INSERT만, 명렬 일치 조건만 검사.
+`practice_submissions`: `id uuid`, `class`, `number`, `name`, `dialogue_id text`, `turn_offsets jsonb`, `file text`, `duration numeric`, `submitted_at`. 유일 제약 없음. RLS: anon INSERT만, 명렬 일치와 학급 입장 열림을 함께 검사.
 
 `returned_submissions`: 본 평가 제출 원본과 `returned_at`, `returned_by_class`, `returned_by_number`를 보관한다. 반환된 제출은 현재 `submissions`에서 제외하여 재응시를 허용하며, 원본 녹음 파일은 유지한다. 일반 클라이언트의 직접 조회·변경은 허용하지 않는다.
 
@@ -75,9 +75,9 @@ Supabase (학교 계정 프로젝트)
 
 ### 4.2 함수
 
-`check_in(p_class, p_number, p_name)` → `{ok boolean, exam_open boolean, submitted boolean, is_teacher boolean}`. `security definer`. 이름은 공백 제거 후 비교한다. `ok`가 거짓이면 평가 상태는 null, `is_teacher`는 false다. anon에 EXECUTE 허용. 호출 결과는 UI 분기용이고, 실제 보호는 INSERT 정책이 다시 검사한다.
+`check_in(p_class, p_number, p_name)` → `{ok, reason, class_open, exam_open, submitted, is_teacher}`. `security definer`. 이름은 공백 제거 후 비교한다. 명렬 불일치는 `ok=false`, 상태는 null이다. 유효한 학생도 닫힌 반이면 `ok=false`, `reason=class_closed`로 입장을 거부한다. 교사는 반 상태와 무관하게 입장한다. anon에 EXECUTE 허용. 제출 INSERT와 녹음 업로드 정책도 학급 상태를 다시 검사한다.
 
-`teacher_dashboard`와 `teacher_set_exam_open`은 반·번호·이름을 받아 서버 명렬의 교사 표시를 확인한다. 전자는 교사 행을 제외한 반별 학생·제출 기록·개방 상태를 반환하고, 후자는 지정 반의 개방 상태를 변경한다. 공개 RPC는 invoker로 두고 권한이 필요한 처리는 비공개 스키마의 definer 함수에서 수행한다. 비밀번호나 별도 Auth 계정은 쓰지 않는다.
+`teacher_dashboard`와 `teacher_set_class_open`은 반·번호·이름을 받아 서버 명렬의 교사 표시를 확인한다. 전자는 교사 행을 제외한 반별 학생·제출 기록·개방 상태를 반환하고, 후자는 지정 반의 개방 상태를 변경한다. 공개 RPC는 invoker로 두고 권한이 필요한 처리는 비공개 스키마의 definer 함수에서 수행한다. 비밀번호나 별도 Auth 계정은 쓰지 않는다.
 
 `teacher_return_submission`은 교사 정보를 확인한 뒤 정확한 제출 ID의 원본을 보관하고 현재 제출에서 제외한다. 이미 반환한 ID의 재요청은 새 제출에 영향을 주지 않는다. 반의 개방 상태는 별도로 관리한다.
 
@@ -114,8 +114,8 @@ Supabase (학교 계정 프로젝트)
 
 ### 6.1 화면 흐름
 
-1. **입장**: 반(1~6 라디오), 번호(숫자), 이름. [확인] → `check_in`. 불일치면 "명렬에 없습니다. 반·번호·이름을 확인하세요". 일치하면 모드 선택.
-2. **모드 선택**: [모의 평가]는 항상 활성. [본 평가]는 `exam_open`이 참이고 `submitted`가 거짓일 때만 활성. 이미 제출했으면 "본 평가를 이미 제출했습니다"를 표시하고 모의 평가만 남긴다. 닫혀 있으면 "본 평가는 수업 시간에 선생님이 열어 줍니다".
+1. **입장**: 반(1~6 선택 상자), 번호(직접 입력 가능한 콤보상자), 이름. [입장하기] → `check_in`. 불일치면 명렬 확인 안내, 닫힌 반이면 학급 입장 안내. 열린 반의 학생은 평가 선택, 교사는 대시보드로 이동한다.
+2. **모드 선택**: 열린 반에서 모의·본 평가를 선택한다. 이미 제출했으면 본 평가를 비활성화하고 모의 평가만 허용한다. 참여 버튼을 누를 때 학급 상태를 다시 확인한다. 제출 전에도 상태를 확인하며, 중간에 닫혔으면 녹음을 유지하고 재개방 후 재시도를 안내한다.
 3. **마이크 준비**: 권한 요청 → 3초 테스트 녹음 → 재생. 실패하면 헤드폰 연결과 권한 안내.
 4. **대화 녹음** (모의는 1편, 본 평가는 2편 순차):
    - 상단: 편 제목, 출처, [전체 듣기](공식 음원, 재생 중 [정지]로 바뀜), 전체 대본.

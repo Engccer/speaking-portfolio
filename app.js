@@ -1,4 +1,4 @@
-import { checkIn, downloadAudio, getClient, getTeacherDashboard, setExamOpen, getRecordingUrl, returnSubmission } from "./lib/supa.js";
+import { checkIn, downloadAudio, getClient, getTeacherDashboard, setClassOpen, getRecordingUrl, returnSubmission } from "./lib/supa.js?v=class-admission";
 import { initNumberCombobox } from "./lib/number-combobox.js";
 import { drawExam, drawPractice } from "./lib/draw.js";
 import { mergeTracks, encodeWav } from "./lib/wav.js";
@@ -23,6 +23,8 @@ export function showScreen(id) {
 const normName = (s) => s.replace(/[\s　]/g, "");
 const fmt = (sec) => `${sec.toFixed(1)}초`;
 let entryBusy = false;
+const closedMessage = "지금은 이 반의 입장이 닫혀 있습니다. 선생님이 열어 주면 모의 평가와 본 평가에 참여할 수 있습니다.";
+const entryMessage = (r) => r.reason === "class_closed" ? closedMessage : "명렬에 없습니다. 반, 번호, 이름을 확인하세요.";
 
 // 입장
 $("entry-form").addEventListener("submit", async (e) => {
@@ -36,7 +38,7 @@ $("entry-form").addEventListener("submit", async (e) => {
   $("entry-error").textContent = "";
   try {
     const r = await checkIn(cls, num, name);
-    if (!r.ok) { $("entry-error").textContent = "명렬에 없습니다. 반, 번호, 이름을 확인하세요."; announce($("entry-error").textContent); return; }
+    if (!r.ok) { $("entry-error").textContent = entryMessage(r); announce($("entry-error").textContent); return; }
     Object.assign(state, { cls, num, name: normName(name) });
     if (r.is_teacher) {
       showScreen("screen-teacher");
@@ -46,7 +48,6 @@ $("entry-form").addEventListener("submit", async (e) => {
     $("mode-greeting").textContent = `${cls}반 ${num}번 ${name}`;
     const examBtn = $("btn-exam");
     if (r.submitted) { examBtn.disabled = true; $("mode-note").textContent = "본 평가를 이미 제출했습니다. 모의 평가만 할 수 있습니다."; }
-    else if (!r.exam_open) { examBtn.disabled = true; $("mode-note").textContent = "본 평가는 수업 시간에 선생님이 열어 줍니다."; }
     else { examBtn.disabled = false; $("mode-note").textContent = "본 평가는 대화 2편을 녹음하고 한 번만 제출할 수 있습니다."; }
     showScreen("screen-mode");
   } catch (err) {
@@ -64,21 +65,47 @@ async function loadDialogues() {
   DIALOGUES = await (await fetch("data/dialogues.json")).json();
 }
 
+let modeBusy = false;
 async function chooseMode(mode) {
-  await loadDialogues();
-  state.mode = mode;
-  state.recordings = {};
-  state.current = 0;
-  state.submitted = false;
-  state.built = null;
-  $("btn-mic-next").disabled = true;
-  if (mode === "exam") {
-    const [a, b] = await drawExam(state.cls, state.num);
-    state.dialogues = [DIALOGUES[a], DIALOGUES[b]];
-  } else {
-    state.dialogues = [DIALOGUES[drawPractice()]];
+  if (modeBusy) return;
+  modeBusy = true;
+  const button = $(mode === "exam" ? "btn-exam" : "btn-practice");
+  button.setAttribute("aria-disabled", "true");
+  try {
+    const r = await checkIn(state.cls, state.num, state.name);
+    if (!r.ok) {
+      $("entry-error").textContent = entryMessage(r);
+      showScreen("screen-entry");
+      announce($("entry-error").textContent);
+      return;
+    }
+    if (mode === "exam" && r.submitted) {
+      $("mode-note").textContent = "본 평가를 이미 제출했습니다. 모의 평가만 할 수 있습니다.";
+      announce($("mode-note").textContent);
+      return;
+    }
+    await loadDialogues();
+    state.mode = mode;
+    state.recordings = {};
+    state.current = 0;
+    state.submitted = false;
+    state.built = null;
+    $("btn-mic-next").disabled = true;
+    if (mode === "exam") {
+      const [a, b] = await drawExam(state.cls, state.num);
+      state.dialogues = [DIALOGUES[a], DIALOGUES[b]];
+    } else {
+      state.dialogues = [DIALOGUES[drawPractice()]];
+    }
+    showScreen("screen-mic");
+  } catch (err) {
+    $("mode-note").textContent = "서버에 연결할 수 없습니다. 잠시 후 다시 참여하기를 누르세요.";
+    announce($("mode-note").textContent);
+    console.error(err);
+  } finally {
+    modeBusy = false;
+    button.removeAttribute("aria-disabled");
   }
-  showScreen("screen-mic");
 }
 $("btn-practice").addEventListener("click", () => chooseMode("practice"));
 $("btn-exam").addEventListener("click", () => chooseMode("exam"));
@@ -385,6 +412,8 @@ async function submit() {
   $("btn-preview").disabled = true;
   $("btn-back-record").disabled = true;
   try {
+    const access = await checkIn(state.cls, state.num, state.name);
+    if (!access.ok) throw Object.assign(new Error(entryMessage(access)), { code: access.reason === "class_closed" ? "CLASS_CLOSED" : "STUDENT_INVALID" });
     if (!state.built) {
       step("병합 중");
       await ensureBuilt();
@@ -420,12 +449,18 @@ async function submit() {
     }
   } catch (err) {
     console.error(err);
-    status.textContent = `제출에 실패했습니다 (${err.message || err}). 네트워크를 확인하고 [다시 제출하기]를 누르세요.`;
+    let closed = err.code === "CLASS_CLOSED";
+    if (!closed && (err.code === "42501" || Number(err.statusCode || err.status) === 403)) {
+      try { closed = (await checkIn(state.cls, state.num, state.name)).reason === "class_closed"; } catch { /* 원래 제출 오류를 표시한다. */ }
+    }
+    status.textContent = closed
+      ? "이 반의 입장이 닫혀 제출할 수 없습니다. 녹음은 이 화면에 보관됩니다. 창을 닫지 말고 선생님이 입장을 열어 주면 [다시 제출하기]를 누르세요."
+      : `제출에 실패했습니다 (${err.message || err}). 입력 정보와 네트워크를 확인하고 [다시 제출하기]를 누르세요.`;
     $("btn-submit").textContent = "다시 제출하기";
     $("btn-submit").disabled = false;
     // 본 평가 파일이 이미 올라갔으면 다시 녹음하지 못하게 한다(같은 경로는 덮어쓸 수 없다).
     $("btn-back-record").disabled = state.mode === "exam" && !!state.built?.uploaded;
-    announce("제출 실패");
+    announce(status.textContent);
   } finally {
     submitBusy = false;
     $("btn-submit").removeAttribute("aria-disabled");
@@ -508,8 +543,8 @@ function renderTeacher(classes) {
     // 동작 버튼의 문구와 별도로 현재 개방 상태를 명시한다.
     const status = document.createElement("p");
     const update = () => {
-      status.textContent = `본 평가 ${cls.exam_open ? "열림" : "닫힘"}`;
-      toggle.textContent = `${cls.class}반 본 평가 ${cls.exam_open ? "마감하기" : "개방하기"}`;
+      status.textContent = `학급 입장 ${cls.class_open ? "열림" : "닫힘"}, 모의 평가와 본 평가에 함께 적용됩니다.`;
+      toggle.textContent = `${cls.class}반 입장 ${cls.class_open ? "닫기" : "열기"}`;
     };
     update();
     let toggling = false;
@@ -520,10 +555,10 @@ function renderTeacher(classes) {
       $("btn-teacher-refresh").setAttribute("aria-disabled", "true");
       $("btn-teacher-exit").setAttribute("aria-disabled", "true");
       try {
-        const result = await setExamOpen(state, cls.class, !cls.exam_open);
-        cls.exam_open = result.exam_open;
+        const result = await setClassOpen(state, cls.class, !cls.class_open);
+        cls.class_open = result.class_open;
         update();
-        announce(`${cls.class}반 본 평가가 ${cls.exam_open ? "열렸습니다" : "닫혔습니다"}.`);
+        announce(`${cls.class}반 입장이 ${cls.class_open ? "열렸습니다" : "닫혔습니다"}.`);
       } catch (err) {
         status.textContent = "개방 상태를 확인하지 못했습니다. 현황을 새로고침하세요.";
         toggle.disabled = true;
@@ -596,7 +631,7 @@ function renderTeacher(classes) {
 function confirmReturn(cls, student, button) {
   if (teacherBusy) return;
   const dialog = $("return-dialog");
-  $("return-detail").textContent = `${cls.class}반 ${student.number}번 ${student.name}의 기존 제출과 녹음을 보관하고 다시 응시할 수 있게 합니다. 학생은 다시 입장해야 하며, 본 평가가 개방되어 있어야 제출할 수 있습니다.`;
+  $("return-detail").textContent = `${cls.class}반 ${student.number}번 ${student.name}의 기존 제출과 녹음을 보관하고 다시 응시할 수 있게 합니다. 학생은 다시 입장해야 하며, 학급 입장이 열려 있어야 참여할 수 있습니다.`;
   dialog.returnValue = "";
   dialog.onclose = async () => {
     if (dialog.returnValue !== "ok") { button.focus(); return; }

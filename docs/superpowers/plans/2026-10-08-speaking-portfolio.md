@@ -10,6 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-08-speaking-portfolio-design.md`
 
+## 현재 구현 계약
+
+학급 입장은 모의 평가와 본 평가를 함께 제어한다. 최신 API·정책·화면 계약은 위 설계 문서를 따른다. 아래 코드는 최초 구현 시점의 작업 계획이다.
+
 ## Global Constraints
 
 - 저장소는 공개. 학생 이름, 음원, 서비스 키, ElevenLabs 키, 사용자 홈 절대경로를 커밋하지 않는다. 커밋 전 `python ~/.claude/skills/sanitize-for-release/scripts/scan_traces.py .` 종료 코드 0. <!-- sanitize: allow 저자 머신 전용 작업 지침 -->

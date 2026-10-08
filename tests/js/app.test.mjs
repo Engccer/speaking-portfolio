@@ -6,6 +6,7 @@ import { mergeTracks, encodeWav } from "../../lib/wav.js";
 import { initNumberCombobox } from "../../lib/number-combobox.js";
 
 const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
+const dialogues = JSON.parse(await readFile(new URL("../../data/dialogues.json", import.meta.url), "utf8"));
 const source = (await readFile(new URL("../../app.js", import.meta.url), "utf8"))
   .replace(/^import .*;\r?\n/gm, "").replace(/export /g, "");
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -29,12 +30,13 @@ function app(t, overrides = {}) {
   };
   Object.assign(w, {
     mergeTracks, encodeWav, initNumberCombobox,
-    checkIn: async () => ({ ok: true, exam_open: true, submitted: false, is_teacher: false }),
-    getTeacherDashboard: async () => ({ classes: [{ class: 1, exam_open: false, students: [
+    fetch: async () => ({ json: async () => dialogues }),
+    checkIn: async () => ({ ok: true, class_open: true, submitted: false, is_teacher: false }),
+    getTeacherDashboard: async () => ({ classes: [{ class: 1, class_open: false, students: [
       { number: 1, name: "학생 가", submission_id: "old-submission", submitted_at: "2026-10-09T00:00:00Z", dialogue_ids: ["A", "B"], files: ["a.wav", "b.wav"], durations: [1, 1] },
       { number: 2, name: "학생 나", submitted_at: null, dialogue_ids: [], files: [], durations: [] },
     ] }] }),
-    setExamOpen: async (_, cls, open) => ({ class: cls, exam_open: open }),
+    setClassOpen: async (_, cls, open) => ({ class: cls, class_open: open }),
     getRecordingUrl: async (_, path) => `https://example.test/${path}`,
     returnSubmission: async (_, id) => ({ returned: true, submission_id: id }),
     getClient: () => ({ storage: { from: () => ({ upload: async (path, blob) => { uploads.push({ path, blob }); return {}; } }) },
@@ -71,9 +73,9 @@ test("entry uses a labelled select and routes a teacher to class progress", asyn
   assert.equal(a.$("screen-teacher").hidden, false);
   assert.match(a.$("teacher-classes").textContent, /전체 2명, 제출 1명, 미제출 1명/);
   assert.equal(a.w.document.querySelectorAll("tbody tr").length, 2);
-  const toggle = [...a.w.document.querySelectorAll("button")].find((b) => b.textContent === "1반 본 평가 개방하기");
+  const toggle = [...a.w.document.querySelectorAll("button")].find((b) => b.textContent === "1반 입장 열기");
   toggle.focus(); toggle.click(); await settle();
-  assert.equal(toggle.textContent, "1반 본 평가 마감하기");
+  assert.equal(toggle.textContent, "1반 입장 닫기");
   assert.equal(a.w.document.activeElement, toggle);
 });
 
@@ -102,6 +104,72 @@ test("ordinary students still enter the assessment selection", async (t) => {
   const a = app(t); await a.enter();
   assert.equal(a.$("screen-mode").hidden, false);
   assert.equal(a.$("screen-teacher").hidden, true);
+});
+
+test("closed-class entry explains closure and keeps identity for retry", async (t) => {
+  const a = app(t, { checkIn: async () => ({ ok: false, reason: "class_closed", class_open: false }) });
+  await a.enter();
+  assert.equal(a.$("screen-entry").hidden, false);
+  assert.equal(a.$("screen-mode").hidden, true);
+  assert.match(a.$("entry-error").textContent, /입장이 닫혀/);
+  assert.equal(a.$("entry-form").elements.cls.value, "1");
+  assert.equal(a.w.testing.state.cls, 0);
+  a.w.checkIn = async () => ({ ok: true, class_open: true, submitted: false });
+  await a.enter();
+  assert.equal(a.$("screen-mode").hidden, false);
+});
+
+for (const mode of ["practice", "exam"]) {
+  test(`${mode} starts when the class remains open`, async (t) => {
+    const a = app(t); await a.enter();
+    a.$(`btn-${mode}`).click(); await settle();
+    assert.equal(a.$("screen-mic").hidden, false);
+    assert.equal(a.w.testing.state.mode, mode);
+    assert.equal(a.w.testing.state.dialogues.length, mode === "exam" ? 2 : 1);
+  });
+
+  test(`${mode} rechecks admission before starting`, async (t) => {
+    const a = app(t); await a.enter();
+    a.w.checkIn = async () => ({ ok: false, reason: "class_closed", class_open: false });
+    a.$(`btn-${mode}`).click(); await settle();
+    assert.equal(a.$("screen-entry").hidden, false);
+    assert.equal(a.$("screen-mic").hidden, true);
+    assert.match(a.$("entry-error").textContent, /입장이 닫혀/);
+    assert.equal(a.$(`btn-${mode}`).hasAttribute("aria-disabled"), false);
+  });
+
+  test(`${mode} preserves recordings on closure and can submit after reopening`, async (t) => {
+    const a = app(t); a.recordings(mode);
+    const original = a.w.testing.state.recordings;
+    a.w.console.error = () => {};
+    a.w.checkIn = async () => ({ ok: false, reason: "class_closed", class_open: false });
+    await a.w.testing.submit();
+    assert.equal(a.uploads.length, 0);
+    assert.equal(a.inserts.length, 0);
+    assert.equal(a.w.testing.state.recordings, original);
+    assert.equal(a.$("screen-submit").hidden, false);
+    assert.match(a.$("submit-status").textContent, /창을 닫지 말고/);
+    assert.equal(a.w.document.activeElement, a.$("btn-submit"));
+    a.w.checkIn = async () => ({ ok: true, class_open: true, submitted: false });
+    await a.w.testing.submit();
+    assert.equal(a.inserts.length, 1);
+    assert.equal(a.$("screen-done").hidden, false);
+  });
+}
+
+test("closure between admission check and upload is reported without losing recordings", async (t) => {
+  let checks = 0;
+  const a = app(t, {
+    checkIn: async () => ++checks === 1 ? { ok: true, class_open: true } : { ok: false, reason: "class_closed" },
+    getClient: () => ({ storage: { from: () => ({ upload: async () => ({ error: { statusCode: "403", message: "RLS" } }) }) } }),
+  });
+  a.w.console.error = () => {};
+  a.recordings("practice");
+  await a.w.testing.submit();
+  assert.equal(checks, 2);
+  assert.match(a.$("submit-status").textContent, /입장이 닫혀/);
+  assert.ok(a.w.testing.state.built);
+  assert.equal(a.w.testing.state.submitted, false);
 });
 
 test("preview plays both merged WAVs in order and submits the same blobs", async (t) => {
@@ -176,7 +244,7 @@ test("return requires confirmation, prevents duplicate requests, and refreshes p
   const processing = dialog.onclose();
   await dialog.onclose();
   assert.deepEqual(calls, ["old-submission"]);
-  a.w.getTeacherDashboard = async () => ({ classes: [{ class: 1, exam_open: false, students: [
+  a.w.getTeacherDashboard = async () => ({ classes: [{ class: 1, class_open: false, students: [
     { number: 1, name: "학생 가", submission_id: null, submitted_at: null, files: [] },
   ] }] });
   pending.resolve({ returned: true }); await processing;
