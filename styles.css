@@ -2,6 +2,9 @@
 *, *::before, *::after { box-sizing:border-box; }
 body { margin:0; font-family:"Noto Sans KR",sans-serif; font-size:1.125rem; line-height:1.6; overflow-wrap:anywhere; background:var(--bg); color:var(--fg); }
 header, main { max-width:900px; margin:0 auto; padding:16px; }
+header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+header h1 { min-width:0; }
+#btn-exit { flex-shrink:0; }
 h1 { font-size:1.3rem; }
 .screen h2 { font-size:1.5rem; }
 button { font:inherit; font-size:1.05rem; min-width:44px; max-width:calc(100% - 8px); padding:10px 18px; margin:4px; border:2px solid var(--accent); background:#fff; color:var(--accent); border-radius:8px; white-space:normal; overflow-wrap:anywhere; cursor:pointer; }

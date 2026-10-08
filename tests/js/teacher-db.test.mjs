@@ -69,7 +69,7 @@ test("체크인은 DB 교사 표시와 정규화된 이름을 확인한다", asy
 test("닫힌 반은 학생 입장을 막고 교사에게는 관리 화면 진입을 허용한다", async () => {
   assert.deepEqual(await rpc("check_in", student), {
     ok: false, reason: "class_closed", class_open: false, exam_open: false,
-    submitted: true, is_teacher: false,
+    submitted: true, practice_completed: true, is_teacher: false,
   });
   const result = await rpc("check_in");
   assert.equal(result.ok, true);
@@ -78,7 +78,7 @@ test("닫힌 반은 학생 입장을 막고 교사에게는 관리 화면 진입
   assert.equal(result.reason, null);
   assert.deepEqual(await rpc("check_in", [1, 40, "오답"]), {
     ok: false, reason: null, class_open: null, exam_open: null,
-    submitted: null, is_teacher: false,
+    submitted: null, practice_completed: null, is_teacher: false,
   });
 });
 
@@ -106,6 +106,48 @@ test("대시보드는 전체 학생·미제출·반별 상태를 반환하고 �
   assert.equal(classes[0].students[1].submitted_at, null);
   assert.equal(classes[0].students[1].submission_id, null);
   assert.deepEqual(classes[0].students[1].files, []);
+  assert.equal(classes[0].students[0].practice_submissions.length, 1);
+  assert.equal(classes[0].students[0].practice_submissions[0].file, "practice/a.wav");
+  assert.deepEqual(classes[0].students[1].practice_submissions, []);
+});
+
+test("모의 평가 완료 여부와 녹음 목록은 학생별로 분리하고 여러 시도를 최신순으로 반환한다", async () => {
+  assert.equal((await rpc("check_in", student)).practice_completed, true);
+  assert.equal((await rpc("check_in", [1, 2, "학생 둘"])).practice_completed, false);
+  assert.equal((await rpc("check_in", [2, 1, "학생 셋"])).practice_completed, false);
+  try {
+    await db.exec(`
+      reset role;
+      insert into public.practice_submissions(class,number,name,dialogue_id,turn_offsets,file,duration,submitted_at)
+      values
+        (1,2,'학생 둘','L5-1','[]','practice/older.wav',10,'2026-10-01T01:00:00Z'),
+        (1,2,'학생 둘','L6-1','[]','practice/newer.wav',11,'2026-10-02T01:00:00Z');
+      insert into storage.objects(bucket_id,name) values
+        ('recordings','practice/older.wav'), ('recordings','practice/newer.wav'),
+        ('recordings','practice/unsubmitted.wav');
+      set role anon;
+    `);
+    const { classes } = await rpc("teacher_dashboard");
+    const practices = classes[0].students[1].practice_submissions;
+    assert.deepEqual(practices.map(p => p.file), ["practice/newer.wav", "practice/older.wav"]);
+    assert.deepEqual(practices.map(p => p.dialogue_id), ["L6-1", "L5-1"]);
+    assert.ok(practices.every(p => p.id && p.submitted_at));
+    assert.equal(classes[0].students.length, 2);
+    assert.equal(classes[0].students[0].practice_submissions.length, 1);
+    assert.deepEqual(classes[1].students[0].practice_submissions, []);
+    assert.equal((await rpc("check_in", [1, 2, "학생 둘"])).practice_completed, true);
+    assert.equal((await rpc("check_in", [1, 2, "학생 둘"])).submitted, false);
+    assert.deepEqual((await recordings(header())).filter(p => p.startsWith("practice/")),
+      ["practice/a.wav", "practice/newer.wav", "practice/older.wav"]);
+    assert.deepEqual(await recordings(header([1, 2, "학생 둘"])), []);
+  } finally {
+    await db.exec(`
+      reset role;
+      delete from public.practice_submissions where class = 1 and number = 2;
+      delete from storage.objects where name in ('practice/older.wav','practice/newer.wav','practice/unsubmitted.wav');
+      set role anon;
+    `);
+  }
 });
 
 test("학생·잘못된 교사 정보로 조회 및 설정 변경이 차단된다", async () => {
@@ -152,9 +194,12 @@ test("연습과 실전 제출은 설정 없음·마감 시 차단되고 개방 �
     await assert.rejects(practice(), { code: "42501" });
     await rpc("teacher_set_class_open", [...teacher,2,true]);
     await assert.rejects(practice("틀린 이름"), { code: "42501" });
+    assert.equal((await rpc("check_in", [2, 1, "학생 셋"])).practice_completed, false);
     await exam();
+    assert.equal((await rpc("check_in", [2, 1, "학생 셋"])).submitted, true);
     await practice();
     await practice();
+    assert.equal((await rpc("check_in", [2, 1, "학생 셋"])).practice_completed, true);
     await rpc("teacher_set_class_open", [...teacher,2,false]);
     await assert.rejects(exam(), { code: "42501" });
     await assert.rejects(practice(), { code: "42501" });

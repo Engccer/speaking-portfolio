@@ -8,7 +8,9 @@ import { mergeTracks, encodeWav } from "./lib/wav.js";
 export const state = {
   cls: 0, num: 0, name: "", mode: "", dialogues: [], current: 0, recordings: {}, stream: null,
   submitted: false, built: null,
+  entered: false, isTeacher: false, examSubmitted: false, practiceCompleted: null,
 };
+let sessionVersion = 0;
 let DIALOGUES = [];
 const SR = 16000;
 
@@ -19,6 +21,7 @@ export function announce(text) { live.textContent = ""; setTimeout(() => { live.
 
 export function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => { s.hidden = s.id !== id; });
+  $("btn-exit").hidden = !state.entered || state.isTeacher;
   $(id).querySelector("h2").focus();
 }
 
@@ -27,6 +30,23 @@ const fmt = (sec) => `${sec.toFixed(1)}초`;
 let entryBusy = false;
 const closedMessage = "지금은 이 반의 입장이 닫혀 있습니다. 선생님이 열어 주면 모의 평가와 본 평가에 참여할 수 있습니다.";
 const entryMessage = (r) => r.reason === "class_closed" ? closedMessage : "명렬에 없습니다. 반, 번호, 이름을 확인하세요.";
+
+function updateParticipation(result) {
+  state.examSubmitted = !!result.submitted;
+  if (typeof result.practice_completed === "boolean") state.practiceCompleted = result.practice_completed;
+}
+
+function showMode() {
+  $("mode-greeting").textContent = `${state.cls}반 ${state.num}번 ${state.name}`;
+  $("practice-status").textContent = state.practiceCompleted === null
+    ? "모의 평가 완료 여부를 확인하지 못했습니다."
+    : `모의 평가 ${state.practiceCompleted ? "완료" : "미완료"}`;
+  $("btn-exam").disabled = state.examSubmitted;
+  $("mode-note").textContent = state.examSubmitted
+    ? "본 평가를 이미 제출했습니다. 모의 평가만 할 수 있습니다."
+    : "본 평가는 대화 2편을 녹음하고 한 번만 제출할 수 있습니다.";
+  showScreen("screen-mode");
+}
 
 // 입장
 $("entry-form").addEventListener("submit", async (e) => {
@@ -41,17 +61,14 @@ $("entry-form").addEventListener("submit", async (e) => {
   try {
     const r = await checkIn(cls, num, name);
     if (!r.ok) { $("entry-error").textContent = entryMessage(r); announce($("entry-error").textContent); return; }
-    Object.assign(state, { cls, num, name: normName(name) });
+    Object.assign(state, { cls, num, name: normName(name), entered: true, isTeacher: !!r.is_teacher });
+    updateParticipation(r);
     if (r.is_teacher) {
       showScreen("screen-teacher");
       await refreshTeacher();
       return;
     }
-    $("mode-greeting").textContent = `${cls}반 ${num}번 ${name}`;
-    const examBtn = $("btn-exam");
-    if (r.submitted) { examBtn.disabled = true; $("mode-note").textContent = "본 평가를 이미 제출했습니다. 모의 평가만 할 수 있습니다."; }
-    else { examBtn.disabled = false; $("mode-note").textContent = "본 평가는 대화 2편을 녹음하고 한 번만 제출할 수 있습니다."; }
-    showScreen("screen-mode");
+    showMode();
   } catch (err) {
     $("entry-error").textContent = "서버에 연결할 수 없습니다. 선생님에게 알리세요.";
     announce($("entry-error").textContent);
@@ -68,25 +85,31 @@ async function loadDialogues() {
 }
 
 let modeBusy = false;
-async function chooseMode(mode) {
+async function chooseMode(mode, button = $(mode === "exam" ? "btn-exam" : "btn-practice")) {
   if (modeBusy) return;
   modeBusy = true;
-  const button = $(mode === "exam" ? "btn-exam" : "btn-practice");
+  const version = sessionVersion;
   button.setAttribute("aria-disabled", "true");
   try {
     const r = await checkIn(state.cls, state.num, state.name);
+    if (version !== sessionVersion) return;
     if (!r.ok) {
-      $("entry-error").textContent = entryMessage(r);
-      showScreen("screen-entry");
-      announce($("entry-error").textContent);
+      showMode();
+      $("mode-note").textContent = entryMessage(r);
+      announce($("mode-note").textContent);
       return;
     }
+    updateParticipation(r);
     if (mode === "exam" && r.submitted) {
-      $("mode-note").textContent = "본 평가를 이미 제출했습니다. 모의 평가만 할 수 있습니다.";
+      showMode();
       announce($("mode-note").textContent);
       return;
     }
     await loadDialogues();
+    if (version !== sessionVersion) return;
+    stopPreview();
+    $("mic-playback").pause(); $("mic-playback").hidden = true;
+    $("mic-status").textContent = "";
     state.mode = mode;
     state.recordings = {};
     state.current = 0;
@@ -95,22 +118,26 @@ async function chooseMode(mode) {
     $("btn-mic-next").disabled = true;
     if (mode === "exam") {
       const [a, b] = await drawExam(state.cls, state.num);
+      if (version !== sessionVersion) return;
       state.dialogues = [DIALOGUES[a], DIALOGUES[b]];
     } else {
       state.dialogues = [DIALOGUES[drawPractice()]];
     }
     showScreen("screen-mic");
   } catch (err) {
+    if (version !== sessionVersion) return;
+    showMode();
     $("mode-note").textContent = "서버에 연결할 수 없습니다. 잠시 후 다시 참여하기를 누르세요.";
     announce($("mode-note").textContent);
     console.error(err);
   } finally {
-    modeBusy = false;
+    if (version === sessionVersion) modeBusy = false;
     button.removeAttribute("aria-disabled");
   }
 }
 $("btn-practice").addEventListener("click", () => chooseMode("practice"));
 $("btn-exam").addEventListener("click", () => chooseMode("exam"));
+$("btn-done-exam").addEventListener("click", (e) => chooseMode("exam", e.currentTarget));
 
 // 마이크 준비
 let micBusy = false, micCapture = null, micTimer = null, micUrl = null;
@@ -125,7 +152,10 @@ function releaseMicrophone() {
 }
 async function getMicrophone() {
   if (!state.stream?.getAudioTracks().some((track) => track.readyState === "live")) {
-    state.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const version = sessionVersion;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    if (version !== sessionVersion) { stream.getTracks().forEach((track) => track.stop()); throw new Error("퇴장하여 마이크 요청을 취소했습니다."); }
+    state.stream = stream;
   }
   return state.stream;
 }
@@ -133,6 +163,7 @@ async function getMicrophone() {
 $("btn-mic-test").addEventListener("click", async () => {
   if (micBusy) return;
   micBusy = true;
+  const version = sessionVersion;
   const status = $("mic-status");
   const testBtn = $("btn-mic-test");
   const playback = $("mic-playback");
@@ -147,6 +178,7 @@ $("btn-mic-test").addEventListener("click", async () => {
     testBtn.removeAttribute("aria-disabled");
   };
   const failed = (err) => {
+    if (version !== sessionVersion) return;
     release();
     status.textContent = "마이크 테스트를 완료하지 못했습니다. 헤드폰 연결과 브라우저 마이크 권한을 확인한 뒤 다시 누르세요.";
     announce(status.textContent); console.error(err);
@@ -158,6 +190,7 @@ $("btn-mic-test").addEventListener("click", async () => {
     announce("녹음 중");
     micCapture = startCapture(stream, {
       onComplete: (blob) => {
+        if (version !== sessionVersion) return;
         release();
         micUrl = URL.createObjectURL(blob); playback.src = micUrl; playback.hidden = false;
         $("btn-mic-next").disabled = false;
@@ -298,6 +331,7 @@ $("unit-list").addEventListener("click", async (e) => {
     }
     if (recordingBusy) return;
     recordingBusy = true;
+    const version = sessionVersion;
     stopPlayAll();
     stopUnitPlayback();
     const release = () => {
@@ -307,6 +341,7 @@ $("unit-list").addEventListener("click", async (e) => {
       setBusy(false);
     };
     const failed = (err) => {
+      if (version !== sessionVersion) return;
       release();
       li.querySelector(".status").textContent = `녹음을 완료하지 못했습니다. 다시 녹음하세요.${recs[i] ? " 이전 녹음은 유지됩니다." : ""}`;
       announce(li.querySelector(".status").textContent); console.error(err);
@@ -318,7 +353,7 @@ $("unit-list").addEventListener("click", async (e) => {
       const stream = await getMicrophone();
       if (document.hidden) throw new Error("화면이 가려져 녹음을 취소했습니다.");
       recorder = startCapture(stream, {
-        onComplete: (blob) => { recs[i] = blob; release(); announce(`${i + 1}번 녹음됨 ${fmt(blob.duration)}`); },
+        onComplete: (blob) => { if (version !== sessionVersion) return; recs[i] = blob; release(); announce(`${i + 1}번 녹음됨 ${fmt(blob.duration)}`); },
         onError: failed,
       });
       li.classList.add("recording");
@@ -381,9 +416,15 @@ $("btn-next").addEventListener("click", () => {
   else showSubmitScreen();
 });
 
-window.addEventListener("beforeunload", (e) => {
+function hasUnsubmittedRecording() {
   const has = Object.values(state.recordings).some((r) => Object.keys(r).length);
-  if ((has || recordingBusy || micBusy) && !state.submitted) { e.preventDefault(); e.returnValue = ""; }
+  return (has || recordingBusy || micBusy) && !state.submitted;
+}
+function needsExitWarning() {
+  return (state.entered && !state.isTeacher && !state.examSubmitted) || hasUnsubmittedRecording() || submitBusy;
+}
+window.addEventListener("beforeunload", (e) => {
+  if (needsExitWarning()) { e.preventDefault(); e.returnValue = ""; }
 });
 
 // 제출
@@ -571,20 +612,55 @@ async function submit() {
 
 function finish(text) {
   state.submitted = true;
+  if (state.mode === "exam") state.examSubmitted = true;
+  else state.practiceCompleted = true;
   state.stream?.getTracks().forEach((track) => track.stop());
   state.stream = null;
   $("btn-restart").hidden = state.mode !== "practice";
+  $("btn-done-exam").hidden = state.mode !== "practice" || state.examSubmitted;
   $("done-text").textContent = text;
   showScreen("screen-done");
   announce(text);
 }
 
 $("btn-restart").addEventListener("click", () => {
+  if (modeBusy) return;
   stopPreview();
-  Object.assign(state, { cls: 0, num: 0, name: "", recordings: {}, built: null, submitted: false, dialogues: [], current: 0, mode: "" });
+  Object.assign(state, { recordings: {}, built: null, submitted: false, dialogues: [], current: 0, mode: "" });
+  showMode();
+});
+
+function exitStudent() {
+  sessionVersion++;
+  recordingRevision++;
+  clearTimeout(micTimer); micTimer = null;
+  micCapture?.stop(); micCapture = null;
+  recorder?.stop(); recorder = null;
+  stopMicVisualization(); releaseMicrophone();
+  stopPlayAll(); stopUnitPlayback(); stopPreview();
+  $("mic-playback").pause(); $("mic-playback").hidden = true;
+  if (micUrl) { URL.revokeObjectURL(micUrl); micUrl = null; }
+  micBusy = recordingBusy = modeBusy = false;
+  $("btn-mic-test").removeAttribute("aria-disabled");
+  $("btn-play-all").disabled = false;
+  $("btn-prev-dialogue").disabled = false;
+  Object.assign(state, { cls: 0, num: 0, name: "", recordings: {}, built: null, submitted: false, dialogues: [], current: 0, mode: "", entered: false, isTeacher: false, examSubmitted: false, practiceCompleted: null });
   $("entry-form").reset();
   $("entry-error").textContent = "";
   showScreen("screen-entry");
+}
+
+$("btn-exit").addEventListener("click", () => {
+  if (submitBusy) { announce("제출 중입니다. 제출 결과를 확인한 뒤 퇴장하세요."); return; }
+  if (!needsExitWarning()) { exitStudent(); return; }
+  $("exit-detail").textContent = !state.examSubmitted
+    ? "아직 본 평가에 응시하지 않았거나 제출을 완료하지 않았습니다. 모의 평가는 본 평가 응시로 인정되지 않습니다. 퇴장할까요? 제출하지 않은 녹음은 사라집니다."
+    : "제출하지 않은 녹음이 있습니다. 퇴장하면 이 녹음은 사라집니다. 퇴장할까요?";
+  const dialog = $("exit-dialog");
+  dialog.returnValue = "";
+  dialog.onclose = () => { if (dialog.returnValue === "ok") exitStudent(); else $("btn-exit").focus(); };
+  dialog.showModal();
+  $("exit-cancel").focus();
 });
 
 // 교사 대시보드
@@ -613,7 +689,7 @@ async function refreshTeacher() {
   try {
     const data = await getTeacherDashboard(state);
     renderTeacher(data.classes);
-    $("teacher-status").textContent = "본 평가 제출 현황입니다.";
+    $("teacher-status").textContent = "모의 평가 완료 여부와 본 평가 제출 현황입니다.";
     announce("제출 현황을 불러왔습니다.");
     return true;
   } catch (err) {
@@ -645,7 +721,7 @@ function renderTeacher(classes) {
     const status = document.createElement("p");
     const update = () => {
       status.textContent = `학급 입장 ${cls.class_open ? "열림" : "닫힘"}, 모의 평가와 본 평가에 함께 적용됩니다.`;
-      toggle.textContent = `${cls.class}반 입장 ${cls.class_open ? "닫기" : "열기"}`;
+      toggle.textContent = `${cls.class}반 ${cls.class_open ? "마감하기" : "입장 열기"}`;
     };
     update();
     let toggling = false;
@@ -674,9 +750,9 @@ function renderTeacher(classes) {
       }
     });
     const table = document.createElement("table");
-    const caption = table.createCaption(); caption.textContent = `${cls.class}반 본 평가 제출 현황`;
+    const caption = table.createCaption(); caption.textContent = `${cls.class}반 평가 현황`;
     const header = table.createTHead().insertRow();
-    ["번호", "이름", "제출 상태", "녹음", "재응시"].forEach((name) => {
+    ["번호", "이름", "모의 평가", "모의 평가 녹음", "본 평가", "본 평가 녹음", "재응시"].forEach((name) => {
       const th = document.createElement("th"); th.scope = "col"; th.textContent = name; header.append(th);
     });
     const tbody = table.createTBody();
@@ -684,11 +760,18 @@ function renderTeacher(classes) {
       const row = tbody.insertRow();
       row.insertCell().textContent = student.number;
       const name = document.createElement("th"); name.scope = "row"; name.textContent = student.name; row.append(name);
+      const practices = student.practice_submissions;
+      row.insertCell().textContent = !Array.isArray(practices) ? "확인 불가" : practices.length ? "완료" : "미완료";
+      const practiceFiles = row.insertCell();
+      const recordings = (practices || []).map((attempt, i) => ({ path: attempt.file, cell: practiceFiles,
+        label: `${student.number}번 모의 평가 ${practices.length - i}회 ${attempt.dialogue_id} 녹음 재생하기` }));
+      if (!recordings.length) practiceFiles.textContent = Array.isArray(practices) ? "녹음 없음" : "확인 불가";
       row.insertCell().textContent = student.submitted_at ? "제출" : "미제출";
       const files = row.insertCell();
-      student.files.forEach((path, i) => {
+      recordings.push(...student.files.map((path, i) => ({ path, cell: files, label: `${student.number}번 대화 ${i + 1} 녹음 재생하기` })));
+      recordings.forEach(({ path, cell, label }) => {
         const play = document.createElement("button"); play.type = "button";
-        play.dataset.label = `${student.number}번 대화 ${i + 1} 녹음 재생하기`;
+        play.dataset.label = label;
         play.textContent = play.dataset.label;
         play.addEventListener("click", async () => {
           if (teacherPlayButton === play) { stopTeacherAudio(); return; }
@@ -713,7 +796,7 @@ function renderTeacher(classes) {
             console.error(err);
           }
         });
-        files.append(play);
+        cell.append(play);
       });
       if (!student.files.length) files.textContent = "녹음 없음";
       const action = row.insertCell();
@@ -768,7 +851,7 @@ $("btn-teacher-exit").addEventListener("click", () => {
   if (teacherBusy) return;
   stopTeacherAudio();
   $("teacher-classes").replaceChildren();
-  Object.assign(state, { cls: 0, num: 0, name: "" });
+  Object.assign(state, { cls: 0, num: 0, name: "", entered: false, isTeacher: false, examSubmitted: false, practiceCompleted: null });
   $("entry-form").reset();
   showScreen("screen-entry");
 });

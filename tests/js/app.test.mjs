@@ -36,7 +36,7 @@ function app(t, overrides = {}) {
     startCapture: (stream, handlers) => startCapture(stream, handlers, w.MediaRecorder),
     startMicMeter: () => () => {},
     fetch: async () => ({ json: async () => dialogues }),
-    checkIn: async () => ({ ok: true, class_open: true, submitted: false, is_teacher: false }),
+    checkIn: async () => ({ ok: true, class_open: true, submitted: false, practice_completed: false, is_teacher: false }),
     getTeacherDashboard: async () => ({ classes: [{ class: 1, class_open: false, students: [
       { number: 1, name: "학생 가", submission_id: "old-submission", submitted_at: "2026-10-09T00:00:00Z", dialogue_ids: ["A", "B"], files: ["a.wav", "b.wav"], durations: [1, 1] },
       { number: 2, name: "학생 나", submitted_at: null, dialogue_ids: [], files: [], durations: [] },
@@ -212,7 +212,7 @@ test("entry uses a labelled select and routes a teacher to class progress", asyn
   assert.equal(a.w.document.querySelectorAll("tbody tr").length, 2);
   const toggle = [...a.w.document.querySelectorAll("button")].find((b) => b.textContent === "1반 입장 열기");
   toggle.focus(); toggle.click(); await settle();
-  assert.equal(toggle.textContent, "1반 입장 닫기");
+  assert.equal(toggle.textContent, "1반 마감하기");
   assert.equal(a.w.document.activeElement, toggle);
 });
 
@@ -269,9 +269,9 @@ for (const mode of ["practice", "exam"]) {
     const a = app(t); await a.enter();
     a.w.checkIn = async () => ({ ok: false, reason: "class_closed", class_open: false });
     a.$(`btn-${mode}`).click(); await settle();
-    assert.equal(a.$("screen-entry").hidden, false);
+    assert.equal(a.$("screen-mode").hidden, false);
     assert.equal(a.$("screen-mic").hidden, true);
-    assert.match(a.$("entry-error").textContent, /입장이 닫혀/);
+    assert.match(a.$("mode-note").textContent, /입장이 닫혀/);
     assert.equal(a.$(`btn-${mode}`).hasAttribute("aria-disabled"), false);
   });
 
@@ -334,7 +334,7 @@ test("stopping preview during merge prevents delayed playback", async (t) => {
   assert.equal(a.audios.length, 0);
 });
 
-test("practice completion returns to entry and clears submission state", async (t) => {
+test("practice completion returns to mode with identity and completed status", async (t) => {
   const a = app(t); await a.enter(); a.recordings("practice");
   let stopped = false;
   a.w.testing.state.stream = { getTracks: () => [{ stop: () => { stopped = true; } }] };
@@ -342,14 +342,15 @@ test("practice completion returns to entry and clears submission state", async (
   assert.equal(stopped, true);
   assert.equal(a.$("btn-restart").hidden, false);
   a.$("btn-restart").click();
-  assert.equal(a.$("screen-entry").hidden, false);
+  assert.equal(a.$("screen-mode").hidden, false);
   assert.equal(a.w.testing.state.submitted, false);
   assert.equal(Object.keys(a.w.testing.state.recordings).length, 0);
   assert.equal(a.w.testing.state.built, null);
-  assert.equal(a.w.testing.state.name, "");
-  assert.equal(a.w.testing.state.cls, 0);
-  assert.equal(a.$("entry-form").elements.name.value, "");
-  assert.equal(a.$("entry-form").elements.cls.value, "");
+  assert.equal(a.w.testing.state.name, "학생 예시");
+  assert.equal(a.w.testing.state.cls, 1);
+  assert.equal(a.$("practice-status").textContent, "모의 평가 완료");
+  assert.equal(a.$("btn-exam").disabled, false);
+  assert.equal(a.$("btn-restart").textContent, "이전으로 돌아가기");
 });
 
 test("editing while a preview is being built cannot reuse a stale WAV", async (t) => {
@@ -413,4 +414,174 @@ test("successful return still announces a failed dashboard reload", async (t) =>
   const dialog = a.$("return-dialog"); dialog.returnValue = "ok"; await dialog.onclose();
   await new Promise((resolve) => setTimeout(resolve, 70));
   assert.match(a.$("live").textContent, /되돌려주었습니다.*현황은 불러오지 못했습니다/);
+});
+
+function warnsOnClose(a) {
+  const event = new a.w.Event("beforeunload", { cancelable: true });
+  a.w.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+function confirmExit(a) {
+  a.$("btn-exit").click();
+  const dialog = a.$("exit-dialog");
+  dialog.returnValue = "ok"; dialog.open = false; dialog.onclose();
+}
+
+test("entry without work warns on exit and tab close; cancelling preserves entry", async (t) => {
+  const a = app(t);
+  assert.equal(a.$("btn-exit").hidden, true);
+  assert.equal(warnsOnClose(a), false);
+  await a.enter();
+  assert.equal(a.$("btn-exit").hidden, false);
+  assert.equal(a.$("practice-status").textContent, "모의 평가 미완료");
+  assert.equal(warnsOnClose(a), true);
+  a.$("btn-exit").click();
+  assert.match(a.$("exit-detail").textContent, /본 평가에 응시하지 않았거나/);
+  assert.equal(a.w.document.activeElement, a.$("exit-cancel"));
+  a.$("exit-dialog").returnValue = "cancel"; a.$("exit-dialog").onclose();
+  assert.equal(a.$("screen-mode").hidden, false);
+  assert.equal(a.w.document.activeElement, a.$("btn-exit"));
+  confirmExit(a);
+  assert.equal(a.$("screen-entry").hidden, false);
+  assert.equal(a.$("btn-exit").hidden, true);
+  assert.equal(a.w.testing.state.name, "");
+  assert.equal(warnsOnClose(a), false);
+});
+
+test("practice-only completion still warns and can directly start the exam", async (t) => {
+  const a = app(t); await a.enter(); a.recordings("practice");
+  await a.w.testing.submit();
+  assert.equal(warnsOnClose(a), true);
+  assert.equal(a.$("btn-done-exam").hidden, false);
+  a.$("btn-exit").click();
+  assert.match(a.$("exit-detail").textContent, /모의 평가는 본 평가 응시로 인정되지/);
+  a.$("exit-dialog").returnValue = "cancel"; a.$("exit-dialog").onclose();
+  a.$("btn-done-exam").click(); await settle();
+  assert.equal(a.$("screen-mic").hidden, false);
+  assert.equal(a.w.testing.state.mode, "exam");
+  assert.equal(a.w.testing.state.dialogues.length, 2);
+  assert.equal(a.w.testing.state.cls, 1);
+  assert.equal(warnsOnClose(a), true);
+});
+
+test("reentry restores server practice completion without making practice mandatory", async (t) => {
+  const a = app(t, { checkIn: async () => ({ ok: true, submitted: false, practice_completed: true }) });
+  await a.enter();
+  assert.equal(a.$("practice-status").textContent, "모의 평가 완료");
+  assert.equal(a.$("btn-exam").disabled, false);
+  confirmExit(a);
+  a.w.checkIn = async () => ({ ok: true, submitted: false, practice_completed: false });
+  await a.enter();
+  assert.equal(a.$("practice-status").textContent, "모의 평가 미완료");
+  a.$("btn-exam").click(); await settle();
+  assert.equal(a.$("screen-mic").hidden, false);
+});
+
+test("completed exam allows exit and practice does not reenable exam submission", async (t) => {
+  const a = app(t); await a.enter(); a.recordings();
+  await a.w.testing.submit();
+  assert.equal(warnsOnClose(a), false);
+  a.recordings("practice"); await a.w.testing.submit();
+  assert.equal(a.$("btn-done-exam").hidden, true);
+  assert.equal(warnsOnClose(a), false);
+  a.$("btn-restart").click();
+  assert.equal(a.$("btn-exam").disabled, true);
+  a.$("btn-exit").click();
+  assert.equal(a.$("exit-dialog").open, false);
+  assert.equal(a.$("screen-entry").hidden, false);
+});
+
+test("existing exam submission suppresses warnings on entry", async (t) => {
+  const a = app(t, { checkIn: async () => ({ ok: true, submitted: true, practice_completed: false }) });
+  await a.enter();
+  assert.equal(a.$("btn-exam").disabled, true);
+  assert.equal(warnsOnClose(a), false);
+});
+
+test("exit cancels pending mode selection without reentering a screen", async (t) => {
+  const pending = deferred();
+  const a = app(t); await a.enter();
+  a.w.checkIn = () => pending.promise;
+  a.$("btn-exam").click();
+  confirmExit(a);
+  pending.resolve({ ok: true, submitted: false, practice_completed: true }); await settle();
+  assert.equal(a.$("screen-entry").hidden, false);
+  assert.equal(a.w.testing.state.mode, "");
+  assert.equal(warnsOnClose(a), false);
+});
+
+test("exit stops an active recording and ignores its late completion", async (t) => {
+  const a = app(t); const { sessions, tracks } = microphone(a);
+  await a.enter(); a.recordings("practice"); a.w.testing.showRecordScreen();
+  a.$("unit-list").querySelector('[data-action="rec"]').click(); await settle();
+  confirmExit(a); await settle();
+  assert.equal(sessions[0].stopCount, 1);
+  assert.equal(tracks[0].readyState, "ended");
+  assert.equal(Object.keys(a.w.testing.state.recordings).length, 0);
+  assert.equal(warnsOnClose(a), false);
+  await a.enter(); a.$("btn-exam").click(); await settle();
+  a.w.testing.showRecordScreen();
+  assert.equal(a.$("btn-play-all").disabled, false);
+  a.w.testing.state.current = 1; a.w.testing.showRecordScreen();
+  assert.equal(a.$("btn-prev-dialogue").disabled, false);
+});
+
+test("exit during a microphone permission request releases a late stream", async (t) => {
+  const pending = deferred();
+  const a = app(t); await a.enter(); a.$("btn-practice").click(); await settle();
+  let stopped = false;
+  Object.defineProperty(a.w.navigator, "mediaDevices", { value: { getUserMedia: () => pending.promise } });
+  a.$("btn-mic-test").click();
+  confirmExit(a);
+  pending.resolve({ getTracks: () => [{ stop: () => { stopped = true; } }] }); await settle();
+  assert.equal(stopped, true);
+  assert.equal(a.$("screen-entry").hidden, false);
+  assert.equal(a.$("mic-playback").hidden, true);
+  assert.equal(warnsOnClose(a), false);
+});
+
+test("exit during upload waits for submission result", async (t) => {
+  const pending = deferred();
+  const a = app(t); await a.enter(); a.recordings();
+  a.w.checkIn = () => pending.promise;
+  const submitting = a.w.testing.submit();
+  a.$("btn-exit").click();
+  assert.equal(a.$("exit-dialog").open, false);
+  assert.equal(a.$("screen-submit").hidden, false);
+  pending.resolve({ ok: true, submitted: false }); await submitting;
+  assert.equal(a.$("screen-done").hidden, false);
+  assert.equal(warnsOnClose(a), false);
+});
+
+test("dashboard separates optional practice completion and plays every practice recording", async (t) => {
+  const paths = [];
+  const a = app(t, {
+    checkIn: async () => ({ ok: true, is_teacher: true }),
+    getRecordingUrl: async (_, path) => { paths.push(path); return `https://example.test/${path}`; },
+    getTeacherDashboard: async () => ({ classes: [{ class: 1, class_open: true, students: [
+      { number: 1, name: "학생 가", submitted_at: null, files: [], practice_submissions: [
+        { id: "2", dialogue_id: "L5-2", file: "practice/new.wav" },
+        { id: "1", dialogue_id: "L5-1", file: "practice/old.wav" },
+      ] },
+      { number: 2, name: "학생 나", submitted_at: null, files: [], practice_submissions: [] },
+      { number: 3, name: "학생 다", submitted_at: null, files: [] },
+    ] }] }),
+  });
+  await a.enter();
+  const rows = a.w.document.querySelectorAll("tbody tr");
+  assert.equal(rows[0].cells[2].textContent, "완료");
+  assert.equal(rows[0].cells[4].textContent, "미제출");
+  assert.equal(rows[1].cells[2].textContent, "미완료");
+  assert.equal(rows[2].cells[2].textContent, "확인 불가");
+  const buttons = rows[0].cells[3].querySelectorAll("button");
+  assert.equal(buttons.length, 2);
+  buttons[0].click(); await settle();
+  buttons[1].click(); await settle();
+  assert.deepEqual(paths, ["practice/new.wav", "practice/old.wav"]);
+  assert.equal(a.audios[0].paused, true);
+  assert.equal(a.audios[1].paused, false);
+  a.$("btn-teacher-exit").click();
+  assert.equal(a.audios[1].paused, true);
+  assert.equal(warnsOnClose(a), false);
 });
