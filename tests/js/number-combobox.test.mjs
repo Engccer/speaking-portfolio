@@ -42,3 +42,43 @@ test("pointer selection picks the number and keeps focus in the editable combobo
   assert.equal(input.value, "39"); assert.equal(list.hidden, true);
   assert.equal(dom.window.document.activeElement, input);
 });
+
+test("Home and End navigate the open list while preserving closed-list text editing", (t) => {
+  const { input, list, key, type, dom } = setup(t);
+  type("23");
+  assert.equal(key("Home"), true);
+  assert.equal(key("End"), true);
+  assert.equal(list.hidden, true);
+  key("ArrowDown");
+  assert.equal(key("End"), false);
+  assert.equal(input.getAttribute("aria-activedescendant"), "options-40");
+  assert.equal(input.value, "23");
+  assert.equal(list.querySelector('[aria-selected="true"]').textContent, "40");
+  assert.equal(dom.window.document.activeElement, input);
+  key("Escape");
+  assert.equal(input.value, "23");
+  key("ArrowDown"); key("End"); key("Enter");
+  assert.equal(input.value, "40");
+  assert.equal(list.hidden, true);
+  key("ArrowDown");
+  assert.equal(key("Home"), false);
+  assert.equal(input.getAttribute("aria-activedescendant"), "options-1");
+  assert.equal(key("Tab"), true);
+  assert.equal(input.value, "1");
+  assert.equal(list.hidden, true);
+  key("ArrowDown");
+  for (const modifier of ["ctrlKey", "metaKey", "shiftKey"]) {
+    assert.equal(input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: "End", [modifier]: true, bubbles: true, cancelable: true,
+    })), true);
+    assert.equal(input.getAttribute("aria-activedescendant"), "options-1");
+  }
+  for (const boundaryKey of ["Home", "End"]) {
+    key("ArrowDown");
+    assert.equal(input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: boundaryKey, altKey: true, bubbles: true, cancelable: true,
+    })), true);
+    assert.equal(input.value, "1");
+    assert.equal(list.hidden, true);
+  }
+});
