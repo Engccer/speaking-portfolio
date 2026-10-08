@@ -13,3 +13,16 @@
 - 설계: `docs/superpowers/specs/2026-10-08-speaking-portfolio-design.md`
 - 구현 플랜: `docs/superpowers/plans/2026-10-08-speaking-portfolio.md`
 - Supabase 설정: `supabase/README.md`
+
+## 배포
+
+`main`에 push하면 `.github/workflows/pages.yml`이 GitHub Secrets(`SUPABASE_URL`, `SUPABASE_ANON_KEY`)로 `config.js`를 만들어 앱 파일만 GitHub Pages에 올린다. 주소: https://engccer.github.io/speaking-portfolio/
+
+처음 한 번: 저장소 Settings > Secrets and variables > Actions에 두 시크릿을 넣고, Settings > Pages의 Source를 "GitHub Actions"로 바꾼다.
+
+## 수업 당일 운영
+
+1. 수업 전 `python scripts/open.py <반>`
+2. 학생은 위 주소에서 입장 → 마이크 테스트 → 본 평가
+3. 수업 끝 `python scripts/close.py <반>`
+4. `python scripts/download.py --class <반> "<출력 폴더>"` → `python scripts/transcribe.py "<출력 폴더>"` → `python scripts/score.py "<출력 폴더>"`
