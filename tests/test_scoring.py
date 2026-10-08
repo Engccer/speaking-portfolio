@@ -127,12 +127,25 @@ def test_gap_between_units_not_counted():
 
 @needs_data
 def test_slow_speech_fails_wpm():
-    d = BY_ID["L6-2"]
+    # L6-2의 9번 "Great."처럼 한 단어 표현은 WPM을 잴 수 없어 일치만으로 만족 처리되므로 두 단어 이상인 편을 쓴다.
+    d = BY_ID["L5-1"]
+    assert all(len(e["text"].split()) >= 2 for e in d["expressions"])
     offs = offsets_for(d, unit_sec=60.0)
     scribe = words_from([u["text"] for u in d["units"]], offs, wpm=30)
     r = score_dialogue(d, scribe, offs, DEFAULT_CFG)
     assert r["satisfied"] == 0 and r["score"] == 1
     assert {e["reason"] for e in r["expressions"]} == {"wpm"}
+
+
+@needs_data
+def test_one_word_expression_satisfied_by_match_alone():
+    d = BY_ID["L6-2"]
+    one = [e for e in d["expressions"] if len(e["text"].split()) == 1]
+    assert [e["text"] for e in one] == ["Great."]
+    offs = offsets_for(d, unit_sec=60.0)
+    r = score_dialogue(d, words_from([u["text"] for u in d["units"]], offs, wpm=30), offs, DEFAULT_CFG)
+    hit = next(x for x in r["expressions"] if x["n"] == one[0]["n"])
+    assert hit["ok"] and hit["wpm"] is None and r["satisfied"] == 1
 
 
 @needs_data
