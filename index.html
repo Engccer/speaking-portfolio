@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>영어 말하기 녹음</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=mobile-recording">
 </head>
 <body>
 <header><h1>3학년 영어B 말하기 포트폴리오</h1></header>
@@ -45,8 +45,9 @@
 
   <section id="screen-mic" class="screen" hidden>
     <h2 tabindex="-1">마이크 준비</h2>
-    <p>헤드폰을 연결하고 [마이크 테스트하기]를 누르세요. 3초 동안 녹음한 뒤 자동으로 들려줍니다.</p>
+    <p>헤드폰을 연결하고 [마이크 테스트하기]를 누르세요. 3초 동안 녹음한 뒤 자신의 목소리를 확인하세요.</p>
     <p id="mic-status"></p>
+    <audio id="mic-playback" controls hidden aria-label="마이크 테스트 녹음"></audio>
     <p>
       <button type="button" id="btn-mic-test">마이크 테스트하기</button>
       <button type="button" id="btn-mic-next" disabled>녹음 시작하기</button>
@@ -108,6 +109,6 @@
   </form>
 </dialog>
 
-<script type="module" src="app.js?v=class-admission"></script>
+<script type="module" src="app.js?v=mobile-recording"></script>
 </body>
 </html>

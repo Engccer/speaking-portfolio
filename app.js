@@ -1,5 +1,6 @@
 import { checkIn, downloadAudio, getClient, getTeacherDashboard, setClassOpen, getRecordingUrl, returnSubmission } from "./lib/supa.js?v=class-admission";
 import { initNumberCombobox } from "./lib/number-combobox.js";
+import { startCapture } from "./lib/recording.js";
 import { drawExam, drawPractice } from "./lib/draw.js";
 import { mergeTracks, encodeWav } from "./lib/wav.js";
 
@@ -111,56 +112,86 @@ $("btn-practice").addEventListener("click", () => chooseMode("practice"));
 $("btn-exam").addEventListener("click", () => chooseMode("exam"));
 
 // 마이크 준비
+let micBusy = false, micCapture = null, micTimer = null, micUrl = null;
+function releaseMicrophone() {
+  state.stream?.getTracks().forEach((track) => track.stop());
+  state.stream = null;
+}
+async function getMicrophone() {
+  if (!state.stream?.getAudioTracks().some((track) => track.readyState === "live")) {
+    state.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  }
+  return state.stream;
+}
+
 $("btn-mic-test").addEventListener("click", async () => {
+  if (micBusy) return;
+  micBusy = true;
   const status = $("mic-status");
   const testBtn = $("btn-mic-test");
-  testBtn.disabled = true;
+  const playback = $("mic-playback");
+  testBtn.setAttribute("aria-disabled", "true");
+  $("btn-mic-next").disabled = true;
+  playback.pause(); playback.hidden = true;
+  if (micUrl) { URL.revokeObjectURL(micUrl); micUrl = null; }
+  const release = () => {
+    clearTimeout(micTimer); micTimer = null; micCapture = null; micBusy = false;
+    releaseMicrophone();
+    testBtn.removeAttribute("aria-disabled");
+  };
+  const failed = (err) => {
+    release();
+    status.textContent = "마이크 테스트를 완료하지 못했습니다. 헤드폰 연결과 브라우저 마이크 권한을 확인한 뒤 다시 누르세요.";
+    announce(status.textContent); console.error(err);
+  };
   try {
-    state.stream = state.stream || await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const stream = await getMicrophone();
+    if (document.hidden) throw new Error("화면이 가려져 마이크 테스트를 취소했습니다.");
     status.textContent = "녹음 중 (3초)";
     announce("녹음 중");
-    const rec = new MediaRecorder(state.stream, { mimeType: "audio/webm;codecs=opus" });
-    const chunks = [];
-    rec.ondataavailable = (ev) => chunks.push(ev.data);
-    rec.onstop = () => {
-      const audio = new Audio(URL.createObjectURL(new Blob(chunks, { type: "audio/webm" })));
-      status.textContent = "들려줍니다";
-      audio.onended = () => {
-        status.textContent = "마이크가 잘 됩니다. [녹음 시작하기]를 누르세요.";
-        testBtn.disabled = false;
+    micCapture = startCapture(stream, {
+      onComplete: (blob) => {
+        release();
+        micUrl = URL.createObjectURL(blob); playback.src = micUrl; playback.hidden = false;
         $("btn-mic-next").disabled = false;
-        announce("마이크 준비 완료");
-      };
-      audio.play();
-    };
-    rec.start();
-    setTimeout(() => rec.stop(), 3000);
-  } catch (err) {
-    status.textContent = "마이크를 사용할 수 없습니다. 헤드폰 연결과 브라우저 마이크 권한을 확인한 뒤 다시 누르세요.";
-    testBtn.disabled = false;
-    announce("마이크를 사용할 수 없습니다");
-    console.error(err);
-  }
+        status.textContent = "녹음된 목소리를 확인한 뒤 [녹음 시작하기]를 누르세요.";
+        announce(status.textContent);
+        const url = micUrl;
+        if (document.hidden) return;
+        playback.play().catch(() => {
+          if (micUrl !== url || micBusy || $("screen-mic").hidden) return;
+          status.textContent = "마이크 테스트 녹음의 재생 버튼을 눌러 목소리를 확인한 뒤 [녹음 시작하기]를 누르세요.";
+          announce(status.textContent);
+        });
+      },
+      onError: failed,
+    });
+    micTimer = setTimeout(() => { micCapture?.stop(); releaseMicrophone(); }, 3000);
+  } catch (err) { failed(err); }
 });
-$("btn-mic-next").addEventListener("click", () => { showRecordScreen(); });
+$("btn-mic-next").addEventListener("click", () => { $("mic-playback").pause(); showRecordScreen(); });
 
 // 녹음 화면
-let recorder = null;          // 진행 중인 MediaRecorder
+let recorder = null;          // 진행 중인 녹음 세션
+let recordingBusy = false;
 let playingAll = null;        // 전체 듣기 Audio
+let playAllVersion = 0;
+let unitPlayback = null;
 let recordingRevision = 0;
 const audioCache = {};        // 대화 ID → object URL
 
-async function blobDuration(blob) {
-  return new Promise((res) => {
-    const a = new Audio(URL.createObjectURL(blob));
-    // MediaRecorder가 만든 webm은 길이가 Infinity로 오므로 끝으로 이동시켜 실제 길이를 얻는다.
-    a.onloadedmetadata = () => { if (isFinite(a.duration)) res(a.duration); else { a.currentTime = 1e9; a.ontimeupdate = () => { a.ontimeupdate = null; res(a.duration); }; } };
-  });
-}
-
 function stopPlayAll() {
+  playAllVersion++;
   if (playingAll) { playingAll.pause(); playingAll = null; }
   $("btn-play-all").textContent = "공식 음원 재생하기";
+}
+
+function stopUnitPlayback() {
+  if (!unitPlayback) return;
+  unitPlayback.audio.pause();
+  URL.revokeObjectURL(unitPlayback.url);
+  unitPlayback.button.textContent = "녹음 재생하기";
+  unitPlayback = null;
 }
 
 export function showRecordScreen() {
@@ -168,6 +199,7 @@ export function showRecordScreen() {
   const d = state.dialogues[state.current];
   const isExam = state.mode === "exam";
   stopPlayAll();
+  stopUnitPlayback();
   $("record-title").textContent = `${isExam ? `대화 ${state.current + 1} / 2` : "모의 평가"}: ${d.title}`;
   $("record-source").textContent = d.source;
   $("btn-prev-dialogue").hidden = !(isExam && state.current === 1);
@@ -187,7 +219,9 @@ function renderUnits() {
     li.dataset.index = i;
     const text = document.createElement("p");
     text.id = `unit-text-${i}`;
-    text.textContent = `${u.speaker}, ${u.text}`;
+    text.className = "dialogue-text";
+    text.dataset.speaker = u.speaker;
+    text.textContent = u.text;
     text.lang = "en";
     const mk = (label, action, disabled) => {
       const b = document.createElement("button");
@@ -206,17 +240,32 @@ function renderUnits() {
 function updateNext() {
   const d = state.dialogues[state.current];
   const recs = state.recordings[state.current];
-  $("btn-next").disabled = d.units.some((_, i) => !recs[i]) || !!recorder;
+  $("btn-next").disabled = d.units.some((_, i) => !recs[i]) || recordingBusy;
 }
 
 function setBusy(busy, activeIndex) {
   document.querySelectorAll("#unit-list button").forEach((b) => {
     const isActive = Number(b.closest("li").dataset.index) === activeIndex;
     if (busy) b.disabled = !(isActive && b.dataset.action === "rec");
+    else {
+      const blob = state.recordings[state.current][Number(b.closest("li").dataset.index)];
+      b.disabled = b.dataset.action !== "rec" && !blob;
+      b.removeAttribute("aria-disabled");
+      if (b.dataset.action === "rec") b.textContent = blob ? "다시 녹음하기" : "녹음하기";
+    }
   });
   $("btn-play-all").disabled = busy;
   $("btn-prev-dialogue").disabled = busy;
-  if (busy) $("btn-next").disabled = true; else renderUnits();
+  if (busy) $("btn-next").disabled = true;
+  else {
+    $("unit-list").querySelectorAll("li").forEach((li) => {
+      const blob = state.recordings[state.current][Number(li.dataset.index)];
+      li.classList.remove("recording");
+      li.classList.toggle("recorded", !!blob);
+      li.querySelector(".status").textContent = blob ? `녹음됨 ${fmt(blob.duration)}` : "녹음 전";
+    });
+    updateNext();
+  }
 }
 
 function focusRec(i) {
@@ -229,29 +278,56 @@ $("unit-list").addEventListener("click", async (e) => {
   const recs = state.recordings[state.current];
   const action = btn.dataset.action;
   if (action === "rec") {
-    if (recorder) { recorder.stop(); return; }
+    if (recorder) {
+      btn.textContent = "녹음 저장 중";
+      btn.setAttribute("aria-disabled", "true");
+      li.querySelector(".status").textContent = "녹음 정지됨, 저장 중";
+      recorder.stop(); releaseMicrophone(); return;
+    }
+    if (recordingBusy) return;
+    recordingBusy = true;
     stopPlayAll();
-    const chunks = [];
-    recorder = new MediaRecorder(state.stream, { mimeType: "audio/webm;codecs=opus" });
-    recorder.ondataavailable = (ev) => chunks.push(ev.data);
-    recorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      blob.duration = await blobDuration(blob);
-      recs[i] = blob;
+    stopUnitPlayback();
+    const release = () => {
       recorder = null;
+      recordingBusy = false;
+      releaseMicrophone();
       setBusy(false);
-      announce(`${i + 1}번 녹음됨 ${fmt(blob.duration)}`);
-      focusRec(i);
     };
-    recorder.start();
-    li.classList.add("recording");
-    btn.textContent = "녹음 정지하기";
-    li.querySelector(".status").textContent = "녹음 중";
+    const failed = (err) => {
+      release();
+      li.querySelector(".status").textContent = `녹음을 완료하지 못했습니다. 다시 녹음하세요.${recs[i] ? " 이전 녹음은 유지됩니다." : ""}`;
+      announce(li.querySelector(".status").textContent); console.error(err);
+    };
     setBusy(true, i);
-    announce(`${i + 1}번 녹음 시작`);
+    btn.textContent = "마이크 준비 중";
+    btn.setAttribute("aria-disabled", "true");
+    try {
+      const stream = await getMicrophone();
+      if (document.hidden) throw new Error("화면이 가려져 녹음을 취소했습니다.");
+      recorder = startCapture(stream, {
+        onComplete: (blob) => { recs[i] = blob; release(); announce(`${i + 1}번 녹음됨 ${fmt(blob.duration)}`); },
+        onError: failed,
+      });
+      li.classList.add("recording");
+      btn.textContent = "녹음 정지하기";
+      btn.removeAttribute("aria-disabled");
+      li.querySelector(".status").textContent = "녹음 중";
+      btn.focus();
+      announce(`${i + 1}번 녹음 시작`);
+    } catch (err) { failed(err); }
   } else if (action === "play") {
-    new Audio(URL.createObjectURL(recs[i])).play();
+    if (unitPlayback?.button === btn) { stopUnitPlayback(); return; }
+    stopPlayAll(); stopUnitPlayback();
+    const url = URL.createObjectURL(recs[i]);
+    const audio = new Audio(url);
+    unitPlayback = { audio, url, button: btn };
+    btn.textContent = "녹음 재생 정지하기";
+    audio.onended = () => { if (unitPlayback?.audio === audio) stopUnitPlayback(); };
+    audio.onerror = () => { if (unitPlayback?.audio === audio) { stopUnitPlayback(); announce("녹음을 재생하지 못했습니다. 다시 누르세요."); } };
+    try { await audio.play(); } catch (err) { if (unitPlayback?.audio === audio) { stopUnitPlayback(); announce("녹음을 재생하지 못했습니다. 다시 누르세요."); } }
   } else if (action === "del") {
+    stopUnitPlayback();
     delete recs[i];
     renderUnits();
     announce(`${i + 1}번 녹음 삭제됨`);
@@ -259,30 +335,42 @@ $("unit-list").addEventListener("click", async (e) => {
   }
 });
 
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  micCapture?.stop();
+  recorder?.stop();
+  stopPlayAll(); stopUnitPlayback(); $("mic-playback").pause();
+  releaseMicrophone();
+});
+
 $("btn-play-all").addEventListener("click", async () => {
   const btn = $("btn-play-all");
   if (playingAll) { stopPlayAll(); return; }
   const d = state.dialogues[state.current];
+  stopUnitPlayback();
+  const version = ++playAllVersion;
   try {
     if (!audioCache[d.id]) audioCache[d.id] = URL.createObjectURL(await downloadAudio(d.audio));
+    if (version !== playAllVersion || recordingBusy) return;
     playingAll = new Audio(audioCache[d.id]);
     btn.textContent = "재생 정지하기";
     playingAll.onended = () => stopPlayAll();
     await playingAll.play();
-  } catch (err) { stopPlayAll(); announce("음원을 불러오지 못했습니다"); console.error(err); }
+  } catch (err) { if (version === playAllVersion) { stopPlayAll(); announce("음원을 불러오지 못했습니다"); console.error(err); } }
 });
 
 $("btn-prev-dialogue").addEventListener("click", () => { state.current = 0; showRecordScreen(); });
 
 $("btn-next").addEventListener("click", () => {
   stopPlayAll();
+  stopUnitPlayback();
   if (state.mode === "exam" && state.current === 0) { state.current = 1; showRecordScreen(); }
   else showSubmitScreen();
 });
 
 window.addEventListener("beforeunload", (e) => {
   const has = Object.values(state.recordings).some((r) => Object.keys(r).length);
-  if (has && !state.submitted) { e.preventDefault(); e.returnValue = ""; }
+  if ((has || recordingBusy || micBusy) && !state.submitted) { e.preventDefault(); e.returnValue = ""; }
 });
 
 // 제출

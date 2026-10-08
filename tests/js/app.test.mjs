@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { JSDOM } from "jsdom";
 import { mergeTracks, encodeWav } from "../../lib/wav.js";
 import { initNumberCombobox } from "../../lib/number-combobox.js";
+import { startCapture } from "../../lib/recording.js";
 
 const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
 const dialogues = JSON.parse(await readFile(new URL("../../data/dialogues.json", import.meta.url), "utf8"));
@@ -13,7 +14,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 
 function app(t, overrides = {}) {
-  const dom = new JSDOM(html, { runScripts: "outside-only", url: "https://example.test/" });
+  const dom = new JSDOM(html, { runScripts: "outside-only", pretendToBeVisual: true, url: "https://example.test/" });
   t.after(() => dom.window.close());
   const w = dom.window;
   const audios = [], uploads = [], inserts = [], revoked = [];
@@ -28,8 +29,11 @@ function app(t, overrides = {}) {
   w.OfflineAudioContext = class {
     async decodeAudioData() { return { length: 160, numberOfChannels: 1, getChannelData: () => new Float32Array(160) }; }
   };
+  w.HTMLMediaElement.prototype.pause = function () {};
+  w.HTMLMediaElement.prototype.play = async function () {};
   Object.assign(w, {
     mergeTracks, encodeWav, initNumberCombobox,
+    startCapture: (stream, handlers) => startCapture(stream, handlers, w.MediaRecorder),
     fetch: async () => ({ json: async () => dialogues }),
     checkIn: async () => ({ ok: true, class_open: true, submitted: false, is_teacher: false }),
     getTeacherDashboard: async () => ({ classes: [{ class: 1, class_open: false, students: [
@@ -64,6 +68,133 @@ function app(t, overrides = {}) {
   }
   return { w, $, enter, recordings, audios, uploads, inserts, revoked };
 }
+
+function microphone(a) {
+  const sessions = [], tracks = [];
+  Object.defineProperty(a.w.navigator, "mediaDevices", { value: { getUserMedia: async () => {
+    const track = { readyState: "live", stop() { this.readyState = "ended"; } };
+    tracks.push(track);
+    return { getAudioTracks: () => [track], getTracks: () => [track] };
+  } } });
+  a.w.MediaRecorder = class {
+    static isTypeSupported(type) { return type === "audio/mp4"; }
+    constructor(_, options) { this.mimeType = options.mimeType; this.state = "inactive"; this.stopCount = 0; sessions.push(this); }
+    start() { this.state = "recording"; }
+    stop() {
+      this.stopCount++; this.state = "inactive";
+      queueMicrotask(() => {
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: this.mimeType }) });
+        this.onstop?.();
+      });
+    }
+  };
+  return { sessions, tracks };
+}
+
+test("mobile stop saves without metadata events, keeps the same focused control and releases the mic", async (t) => {
+  const a = app(t), { sessions, tracks } = microphone(a);
+  a.recordings("practice");
+  a.w.testing.state.recordings[0] = {};
+  a.w.testing.showRecordScreen();
+  const button = a.$("unit-list").querySelector('[data-action="rec"]');
+  button.focus(); button.click(); await settle();
+  assert.equal(button.textContent, "녹음 정지하기");
+  button.click(); button.click();
+  assert.equal(button.textContent, "녹음 저장 중");
+  assert.equal(sessions[0].stopCount, 1);
+  await settle();
+  const blob = a.w.testing.state.recordings[0][0];
+  assert.equal(blob.type, "audio/mp4");
+  assert.ok(Number.isFinite(blob.duration) && blob.duration > 0);
+  assert.equal(a.$("unit-list").querySelector('[data-action="rec"]'), button);
+  assert.equal(a.w.document.activeElement, button);
+  assert.equal(button.textContent, "다시 녹음하기");
+  assert.equal(button.hasAttribute("aria-disabled"), false);
+  assert.equal(a.$("btn-next").disabled, false);
+  assert.equal(tracks[0].readyState, "ended");
+  assert.equal(a.audios.length, 0);
+});
+
+test("recording errors retain an earlier take and permit another attempt", async (t) => {
+  const a = app(t), { sessions } = microphone(a);
+  a.w.console.error = () => {};
+  a.recordings("practice"); a.w.testing.showRecordScreen();
+  const original = a.w.testing.state.recordings[0][0];
+  const button = a.$("unit-list").querySelector('[data-action="rec"]');
+  button.click(); await settle();
+  sessions[0].onerror({ error: new Error("device interrupted") });
+  await settle();
+  assert.equal(a.w.testing.state.recordings[0][0], original);
+  assert.match(a.$("unit-list").textContent, /이전 녹음은 유지/);
+  button.click(); await settle(); button.click(); await settle();
+  assert.notEqual(a.w.testing.state.recordings[0][0], original);
+});
+
+test("leaving the visible page stops a take and releases microphone tracks", async (t) => {
+  const a = app(t), { sessions, tracks } = microphone(a);
+  a.recordings("practice"); a.w.testing.showRecordScreen();
+  a.$("unit-list").querySelector('[data-action="rec"]').click(); await settle();
+  Object.defineProperty(a.w.document, "hidden", { configurable: true, value: true });
+  a.w.document.dispatchEvent(new a.w.Event("visibilitychange"));
+  await settle();
+  assert.equal(sessions[0].stopCount, 1);
+  assert.equal(tracks[0].readyState, "ended");
+  assert.ok(a.w.testing.state.recordings[0][0].size);
+});
+
+test("speaker letters are absent from dialogue text and control descriptions", (t) => {
+  const a = app(t); a.recordings("practice");
+  a.w.testing.state.dialogues[0].units.push({ n: 2, speaker: "B", text: "Good morning." });
+  a.w.testing.showRecordScreen();
+  const lines = [...a.w.document.querySelectorAll(".dialogue-text")];
+  assert.deepEqual(lines.map(p => p.textContent), ["Hello.", "Good morning."]);
+  assert.deepEqual(lines.map(p => p.dataset.speaker), ["A", "B"]);
+  assert.equal(lines[0].getAttribute("aria-label"), null);
+  assert.equal(a.$("unit-list").querySelector("button").getAttribute("aria-describedby"), lines[0].id);
+});
+
+test("mobile mic test provides manual playback when autoplay is blocked", async (t) => {
+  const a = app(t); microphone(a);
+  await a.enter(); a.$("btn-practice").click(); await settle();
+  a.$("mic-playback").play = async () => { throw new Error("autoplay denied"); };
+  let endTest;
+  const timer = a.w.setTimeout.bind(a.w);
+  a.w.setTimeout = (fn, delay, ...args) => delay === 3000 ? (endTest = fn, 0) : timer(fn, delay, ...args);
+  a.$("btn-mic-test").focus(); a.$("btn-mic-test").click(); await settle();
+  endTest(); await settle();
+  assert.equal(a.$("mic-playback").hidden, false);
+  assert.equal(a.$("mic-playback").controls, true);
+  assert.equal(a.$("btn-mic-next").disabled, false);
+  assert.equal(a.$("btn-mic-test").hasAttribute("aria-disabled"), false);
+  assert.equal(a.w.document.activeElement, a.$("btn-mic-test"));
+  assert.match(a.$("mic-status").textContent, /재생 버튼/);
+});
+
+test("pending official audio cannot start during recording", async (t) => {
+  const pending = deferred();
+  const a = app(t, { downloadAudio: () => pending.promise }); microphone(a);
+  a.recordings("practice"); a.w.testing.showRecordScreen();
+  a.$("btn-play-all").click();
+  const button = a.$("unit-list").querySelector('[data-action="rec"]');
+  button.click(); await settle();
+  pending.resolve(new Blob(["official"])); await settle();
+  assert.equal(a.audios.length, 0);
+  button.click(); await settle();
+});
+
+test("mic-test completion in the background does not restart playback", async (t) => {
+  const a = app(t); microphone(a);
+  await a.enter(); a.$("btn-practice").click(); await settle();
+  let plays = 0;
+  a.$("mic-playback").play = async () => { plays++; };
+  a.$("btn-mic-test").click(); await settle();
+  Object.defineProperty(a.w.document, "hidden", { configurable: true, value: true });
+  a.w.document.dispatchEvent(new a.w.Event("visibilitychange"));
+  await settle();
+  assert.equal(plays, 0);
+  assert.equal(a.$("mic-playback").hidden, false);
+  assert.equal(a.$("btn-mic-next").disabled, false);
+});
 
 test("entry uses a labelled select and routes a teacher to class progress", async (t) => {
   const a = app(t, { checkIn: async () => ({ ok: true, is_teacher: true }) });
