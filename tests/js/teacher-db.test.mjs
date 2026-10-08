@@ -22,6 +22,8 @@ async function recordings(headers = "{}") {
 before(async () => {
   await db.exec(`
     create role anon;
+    create role authenticated;
+    create role service_role bypassrls;
     create schema storage;
     create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
     create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
@@ -72,7 +74,9 @@ test("대시보드는 전체 학생·미제출·반별 상태를 반환하고 �
   assert.deepEqual(classes[0].students[0].files, ["exam/a.wav", "exam/b.wav"]);
   assert.deepEqual(classes[0].students[0].durations, [12, 13]);
   assert.ok(classes[0].students[0].submitted_at);
+  assert.ok(classes[0].students[0].submission_id);
   assert.equal(classes[0].students[1].submitted_at, null);
+  assert.equal(classes[0].students[1].submission_id, null);
   assert.deepEqual(classes[0].students[1].files, []);
 });
 
@@ -117,10 +121,71 @@ test("깨진 헤더는 권한을 부여하지 않는다", async () => {
   }
 });
 
+test("되돌리기는 교사만 가능하고 보관 테이블 직접 접근은 차단된다", async () => {
+  const id = (await rpc("teacher_dashboard")).classes[0].students[0].submission_id;
+  for (const identity of [student, [1,40,"오답"], [null,null,null]]) {
+    await assert.rejects(rpc("teacher_return_submission", [...identity,id]), { code: "42501" });
+  }
+  await assert.rejects(rpc("teacher_return_submission", [...teacher,null]), { code: "22023" });
+  await assert.rejects(db.query("select * from public.returned_submissions"), { code: "42501" });
+  await assert.rejects(db.query("delete from public.submissions"), { code: "42501" });
+  assert.equal((await rpc("check_in", student)).submitted, true);
+});
+
+test("보관 실패 시 되돌리기 전체가 취소되어 원본이 남는다", async () => {
+  const id = (await rpc("teacher_dashboard")).classes[0].students[0].submission_id;
+  await db.exec("reset role; alter table public.returned_submissions add constraint reject_archive check (false); set role anon;");
+  try {
+    await assert.rejects(rpc("teacher_return_submission", [...teacher,id]), { code: "23514" });
+    assert.equal((await rpc("check_in", student)).submitted, true);
+  } finally {
+    await db.exec("reset role; alter table public.returned_submissions drop constraint reject_archive; set role anon;");
+  }
+});
+
+test("되돌리기는 원본을 보관하고 마감을 유지하며 오래된 요청이 새 제출을 건드리지 않는다", async () => {
+  const id = (await rpc("teacher_dashboard")).classes[0].students[0].submission_id;
+  await db.exec("reset role");
+  const original = (await db.query("select to_jsonb(s) as value from public.submissions s where id = $1", [id])).rows[0].value;
+  await db.exec("set role anon");
+  assert.deepEqual(await rpc("teacher_return_submission", [...teacher,id]), {
+    returned: true, submission_id: id, class: 1, number: 1, exam_open: false,
+  });
+  assert.equal((await rpc("check_in", student)).submitted, false);
+  assert.equal((await rpc("check_in", student)).exam_open, false);
+  const dashboardStudent = (await rpc("teacher_dashboard")).classes[0].students[0];
+  assert.equal(dashboardStudent.submission_id, null);
+  assert.equal(dashboardStudent.submitted_at, null);
+  assert.deepEqual(dashboardStudent.files, []);
+  assert.deepEqual(await recordings(header()), ["exam/a.wav", "exam/b.wav", "practice/a.wav"]);
+  assert.deepEqual(await recordings(header(student)), []);
+  await db.exec("reset role");
+  const archived = (await db.query("select to_jsonb(s) as value from public.returned_submissions s where id = $1", [id])).rows[0].value;
+  const { returned_at, returned_by_class, returned_by_number, ...snapshot } = archived;
+  assert.ok(returned_at);
+  assert.equal(returned_by_class, teacher[0]);
+  assert.equal(returned_by_number, teacher[1]);
+  assert.deepEqual(snapshot, original);
+  await db.exec("set role anon");
+  assert.deepEqual(await rpc("teacher_return_submission", [...teacher,id]), { returned: false, submission_id: id });
+  const resubmit = () => db.query(`insert into public.submissions(class,number,name,dialogue_ids,turn_offsets,files,durations)
+    values (1,1,'학생 예시',array['L5-1','L6-1'],'[]',array['exam/new-a.wav','exam/new-b.wav'],array[14,15])`);
+  await assert.rejects(resubmit(), { code: "42501" });
+  await rpc("teacher_set_exam_open", [...teacher,1,true]);
+  await resubmit();
+  const newId = (await rpc("teacher_dashboard")).classes[0].students[0].submission_id;
+  assert.notEqual(newId, id);
+  assert.deepEqual(await rpc("teacher_return_submission", [...teacher,id]), { returned: false, submission_id: id });
+  assert.equal((await rpc("teacher_dashboard")).classes[0].students[0].submission_id, newId);
+  await assert.rejects(resubmit(), { code: "23505" });
+  assert.equal((await rpc("check_in", student)).submitted, true);
+});
+
 test("교사 표시 해제는 다음 RPC·Storage 요청부터 적용된다", async () => {
   await db.exec("reset role; update public.students set is_teacher = false where class = 1 and number = 40; set role anon;");
   assert.equal((await rpc("check_in")).is_teacher, false);
   await assert.rejects(rpc("teacher_dashboard"), { code: "42501" });
   await assert.rejects(rpc("teacher_set_exam_open", [...teacher,1,true]), { code: "42501" });
+  await assert.rejects(rpc("teacher_return_submission", [...teacher,"00000000-0000-0000-0000-000000000001"]), { code: "42501" });
   assert.deepEqual(await recordings(header()), []);
 });

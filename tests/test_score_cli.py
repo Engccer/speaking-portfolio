@@ -52,3 +52,18 @@ def test_practice_goes_to_csv_only(tmp_path):
     assert not (tmp_path / "4반 말하기 채점.xlsx").exists()
     rows = (tmp_path / "표현별 상세.csv").read_text(encoding="utf-8-sig").splitlines()
     assert len(rows) == 11 and rows[1].split(",")[3] == "모의"
+
+
+def test_returned_submission_is_missing_without_stale_score(tmp_path):
+    make_student(tmp_path, 4, 1, "가나다", ["L5-1", "L6-2"])
+    for metadata in (tmp_path / "3-04").glob("*.json"):
+        if not metadata.name.endswith(".scribe.json"):
+            info = json.loads(metadata.read_text(encoding="utf-8"))
+            info["returned"] = True
+            metadata.write_text(json.dumps(info), encoding="utf-8")
+    (tmp_path / "미제출_3-04.txt").write_text("01 가나다", encoding="utf-8")
+    score.run(tmp_path, tmp_path, score.DEFAULT_CFG)
+    rows = list(load_workbook(tmp_path / "4반 말하기 채점.xlsx").active.iter_rows(values_only=True))
+    assert len(rows) == 2
+    assert rows[1][0] == 1 and rows[1][8] == 0 and rows[1][9] == "미제출"
+    assert len((tmp_path / "표현별 상세.csv").read_text(encoding="utf-8-sig").splitlines()) == 1

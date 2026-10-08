@@ -12,6 +12,7 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from scoring import DEFAULT_CFG, final_score, score_dialogue
+from transcribe import cached_transcript
 
 ROOT = Path(__file__).resolve().parents[1]
 STEM_RE = re.compile(r"^3-(\d\d)-(\d\d) (.+)_([^_]+)_(L\d-\d)$")
@@ -33,8 +34,9 @@ def collect(folder: Path) -> dict:
             continue
         cls, num, name, idx, did = int(m[1]), int(m[2]), m[3], m[4], m[5]
         info = json.loads(meta.read_text(encoding="utf-8"))
-        scribe_path = meta.with_name(meta.stem + ".scribe.json")
-        scribe = json.loads(scribe_path.read_text(encoding="utf-8")) if scribe_path.exists() else None
+        if info.get("returned"):
+            continue
+        scribe = cached_transcript(meta.with_suffix(".wav"))
         entry = {"id": did, "turn_offsets": info["turn_offsets"], "scribe": scribe,
                  "submitted_at": info.get("submitted_at", "")}
         s = students.setdefault((cls, num), {"name": name, "dialogues": {}, "practice": []})

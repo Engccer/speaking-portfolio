@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { JSDOM } from "jsdom";
 import { mergeTracks, encodeWav } from "../../lib/wav.js";
+import { initNumberCombobox } from "../../lib/number-combobox.js";
 
 const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
 const source = (await readFile(new URL("../../app.js", import.meta.url), "utf8"))
@@ -27,14 +28,15 @@ function app(t, overrides = {}) {
     async decodeAudioData() { return { length: 160, numberOfChannels: 1, getChannelData: () => new Float32Array(160) }; }
   };
   Object.assign(w, {
-    mergeTracks, encodeWav,
+    mergeTracks, encodeWav, initNumberCombobox,
     checkIn: async () => ({ ok: true, exam_open: true, submitted: false, is_teacher: false }),
     getTeacherDashboard: async () => ({ classes: [{ class: 1, exam_open: false, students: [
-      { number: 1, name: "학생 가", submitted_at: "2026-10-09T00:00:00Z", dialogue_ids: ["A", "B"], files: ["a.wav", "b.wav"], durations: [1, 1] },
+      { number: 1, name: "학생 가", submission_id: "old-submission", submitted_at: "2026-10-09T00:00:00Z", dialogue_ids: ["A", "B"], files: ["a.wav", "b.wav"], durations: [1, 1] },
       { number: 2, name: "학생 나", submitted_at: null, dialogue_ids: [], files: [], durations: [] },
     ] }] }),
     setExamOpen: async (_, cls, open) => ({ class: cls, exam_open: open }),
     getRecordingUrl: async (_, path) => `https://example.test/${path}`,
+    returnSubmission: async (_, id) => ({ returned: true, submission_id: id }),
     getClient: () => ({ storage: { from: () => ({ upload: async (path, blob) => { uploads.push({ path, blob }); return {}; } }) },
       from: (table) => ({ insert: async (row) => { inserts.push({ table, row }); return {}; } }) }),
     drawExam: async () => [0, 1], drawPractice: () => 0,
@@ -42,6 +44,7 @@ function app(t, overrides = {}) {
     ...overrides,
   });
   w.eval(`${source}\nwindow.testing = {state, showSubmitScreen, showRecordScreen, finish, submit};`);
+  w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   const $ = (id) => w.document.getElementById(id);
   async function enter() {
     const form = $("entry-form");
@@ -154,4 +157,55 @@ test("editing while a preview is being built cannot reuse a stale WAV", async (t
   pending.resolve(new ArrayBuffer(1)); await settle();
   assert.equal(a.w.testing.state.built, null);
   assert.equal(a.audios.length, 0);
+});
+
+test("return requires confirmation, prevents duplicate requests, and refreshes progress", async (t) => {
+  const pending = deferred();
+  const calls = [];
+  const a = app(t, { checkIn: async () => ({ ok: true, is_teacher: true }),
+    returnSubmission: async (_, id) => { calls.push(id); return pending.promise; } });
+  await a.enter();
+  const button = [...a.w.document.querySelectorAll("button")].find((b) => b.textContent === "1번 제출 되돌려주기");
+  button.click();
+  assert.equal(a.w.document.activeElement, a.$("return-cancel"));
+  assert.match(a.$("return-detail").textContent, /기존 제출과 녹음을 보관/);
+  const dialog = a.$("return-dialog");
+  dialog.returnValue = "cancel"; await dialog.onclose();
+  assert.equal(calls.length, 0);
+  button.click(); dialog.returnValue = "ok";
+  const processing = dialog.onclose();
+  await dialog.onclose();
+  assert.deepEqual(calls, ["old-submission"]);
+  a.w.getTeacherDashboard = async () => ({ classes: [{ class: 1, exam_open: false, students: [
+    { number: 1, name: "학생 가", submission_id: null, submitted_at: null, files: [] },
+  ] }] });
+  pending.resolve({ returned: true }); await processing;
+  assert.match(a.$("teacher-classes").textContent, /제출 0명, 미제출 1명/);
+  assert.equal(a.$("teacher-classes").textContent.includes("되돌려주기"), false);
+  assert.equal(a.w.document.activeElement, a.$("btn-teacher-refresh"));
+});
+
+test("a second exam attempt gets new storage paths while retry uses cached paths", async (t) => {
+  const a = app(t); a.recordings();
+  a.$("btn-preview").click(); await settle();
+  const first = [...a.w.testing.state.built.paths];
+  a.$("btn-preview").click();
+  a.$("btn-preview").click(); await settle();
+  assert.deepEqual([...a.w.testing.state.built.paths], first);
+  a.$("btn-back-record").click();
+  a.w.testing.showSubmitScreen();
+  a.$("btn-preview").click(); await settle();
+  assert.notDeepEqual([...a.w.testing.state.built.paths], first);
+});
+
+test("successful return still announces a failed dashboard reload", async (t) => {
+  const a = app(t, { checkIn: async () => ({ ok: true, is_teacher: true }) });
+  await a.enter();
+  const button = [...a.w.document.querySelectorAll("button")].find((b) => b.textContent === "1번 제출 되돌려주기");
+  button.click();
+  a.w.getTeacherDashboard = async () => { throw new Error("offline"); };
+  a.w.console.error = () => {};
+  const dialog = a.$("return-dialog"); dialog.returnValue = "ok"; await dialog.onclose();
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  assert.match(a.$("live").textContent, /되돌려주었습니다.*현황은 불러오지 못했습니다/);
 });

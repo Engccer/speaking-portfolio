@@ -1,4 +1,5 @@
-import { checkIn, downloadAudio, getClient, getTeacherDashboard, setExamOpen, getRecordingUrl } from "./lib/supa.js";
+import { checkIn, downloadAudio, getClient, getTeacherDashboard, setExamOpen, getRecordingUrl, returnSubmission } from "./lib/supa.js";
+import { initNumberCombobox } from "./lib/number-combobox.js";
 import { drawExam, drawPractice } from "./lib/draw.js";
 import { mergeTracks, encodeWav } from "./lib/wav.js";
 
@@ -11,6 +12,7 @@ const SR = 16000;
 
 const $ = (id) => document.getElementById(id);
 const live = $("live");
+initNumberCombobox($("student-number"), $("number-options"));
 export function announce(text) { live.textContent = ""; setTimeout(() => { live.textContent = text; }, 50); }
 
 export function showScreen(id) {
@@ -316,8 +318,9 @@ async function ensureBuilt() {
     for (let di = 0; di < state.dialogues.length; di++) wavs.push(await buildWav(di));
     if (revision !== recordingRevision) throw new Error("녹음이 변경되었습니다. 다시 재생하세요.");
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const attempt = crypto.randomUUID();
     const paths = state.mode === "exam"
-      ? state.dialogues.map((d, di) => `exam/${studentDir()}/${di + 1}_${d.id}.wav`)
+      ? state.dialogues.map((d, di) => `exam/${studentDir()}/${attempt}/${di + 1}_${d.id}.wav`)
       : [`practice/${studentDir()}/${stamp}_${state.dialogues[0].id}.wav`];
     state.built = { wavs, paths, uploaded: false };
     return state.built;
@@ -476,10 +479,12 @@ async function refreshTeacher() {
     renderTeacher(data.classes);
     $("teacher-status").textContent = "본 평가 제출 현황입니다.";
     announce("제출 현황을 불러왔습니다.");
+    return true;
   } catch (err) {
     $("teacher-status").textContent = "제출 현황을 불러오지 못했습니다. 다시 새로고침하세요.";
     announce($("teacher-status").textContent);
     console.error(err);
+    return false;
   } finally {
     teacherBusy = false;
     button.removeAttribute("aria-disabled");
@@ -535,7 +540,7 @@ function renderTeacher(classes) {
     const table = document.createElement("table");
     const caption = table.createCaption(); caption.textContent = `${cls.class}반 본 평가 제출 현황`;
     const header = table.createTHead().insertRow();
-    ["번호", "이름", "제출 상태", "녹음"].forEach((name) => {
+    ["번호", "이름", "제출 상태", "녹음", "재응시"].forEach((name) => {
       const th = document.createElement("th"); th.scope = "col"; th.textContent = name; header.append(th);
     });
     const tbody = table.createTBody();
@@ -575,10 +580,51 @@ function renderTeacher(classes) {
         files.append(play);
       });
       if (!student.files.length) files.textContent = "녹음 없음";
+      const action = row.insertCell();
+      if (student.submission_id) {
+        const giveBack = document.createElement("button"); giveBack.type = "button";
+        giveBack.textContent = `${student.number}번 제출 되돌려주기`;
+        giveBack.addEventListener("click", () => confirmReturn(cls, student, giveBack));
+        action.append(giveBack);
+      }
     });
     const scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.append(table);
     section.append(title, summary, status, toggle, scroll); container.append(section);
   });
+}
+
+function confirmReturn(cls, student, button) {
+  if (teacherBusy) return;
+  const dialog = $("return-dialog");
+  $("return-detail").textContent = `${cls.class}반 ${student.number}번 ${student.name}의 기존 제출과 녹음을 보관하고 다시 응시할 수 있게 합니다. 학생은 다시 입장해야 하며, 본 평가가 개방되어 있어야 제출할 수 있습니다.`;
+  dialog.returnValue = "";
+  dialog.onclose = async () => {
+    if (dialog.returnValue !== "ok") { button.focus(); return; }
+    if (teacherBusy) return;
+    teacherBusy = true;
+    button.setAttribute("aria-disabled", "true");
+    button.focus();
+    try {
+      const result = await returnSubmission(state, student.submission_id);
+      // 목록에서 사라질 반환 버튼 대신 항상 남는 컨트롤로 포커스를 옮긴다.
+      $("btn-teacher-refresh").focus();
+      teacherBusy = false;
+      const refreshed = await refreshTeacher();
+      const message = result.returned
+        ? `${cls.class}반 ${student.number}번 제출을 되돌려주었습니다. 학생이 다시 입장하면 재응시할 수 있습니다.`
+        : "이미 처리된 제출입니다. 현재 현황을 확인하세요.";
+      announce(refreshed ? message : `${message} 현황은 불러오지 못했습니다. 다시 새로고침하세요.`);
+    } catch (err) {
+      $("teacher-status").textContent = "되돌려주기 결과를 확인하지 못했습니다. 현황을 새로고침하세요.";
+      announce($("teacher-status").textContent);
+      console.error(err);
+    } finally {
+      teacherBusy = false;
+      button.removeAttribute("aria-disabled");
+    }
+  };
+  dialog.showModal();
+  $("return-cancel").focus();
 }
 
 $("btn-teacher-refresh").addEventListener("click", refreshTeacher);

@@ -69,6 +69,8 @@ Supabase (학교 계정 프로젝트)
 
 `practice_submissions`: `id uuid`, `class`, `number`, `name`, `dialogue_id text`, `turn_offsets jsonb`, `file text`, `duration numeric`, `submitted_at`. 유일 제약 없음. RLS: anon INSERT만, 명렬 일치 조건만 검사.
 
+`returned_submissions`: 본 평가 제출 원본과 `returned_at`, `returned_by_class`, `returned_by_number`를 보관한다. 반환된 제출은 현재 `submissions`에서 제외하여 재응시를 허용하며, 원본 녹음 파일은 유지한다. 일반 클라이언트의 직접 조회·변경은 허용하지 않는다.
+
 `turn_offsets` 형식: `[{"turn": 1, "start": 0.0, "end": 4.2}, ...]`. 병합 WAV 안에서 각 녹음 단위의 시작·끝 초.
 
 ### 4.2 함수
@@ -77,12 +79,14 @@ Supabase (학교 계정 프로젝트)
 
 `teacher_dashboard`와 `teacher_set_exam_open`은 반·번호·이름을 받아 서버 명렬의 교사 표시를 확인한다. 전자는 교사 행을 제외한 반별 학생·제출 기록·개방 상태를 반환하고, 후자는 지정 반의 개방 상태를 변경한다. 공개 RPC는 invoker로 두고 권한이 필요한 처리는 비공개 스키마의 definer 함수에서 수행한다. 비밀번호나 별도 Auth 계정은 쓰지 않는다.
 
+`teacher_return_submission`은 교사 정보를 확인한 뒤 정확한 제출 ID의 원본을 보관하고 현재 제출에서 제외한다. 이미 반환한 ID의 재요청은 새 제출에 영향을 주지 않는다. 반의 개방 상태는 별도로 관리한다.
+
 녹음 재생 요청은 교사 반·번호·이름을 HTTP 헤더로 전달한다. Storage RLS는 교사 자격과 제출 기록에 실제 참조된 경로를 확인하며, 앱은 300초 유효한 서명 URL을 발급받아 재생한다. 서비스 키는 브라우저에 제공하지 않는다.
 
 ### 4.3 Storage
 
 - `audio` 버킷(비공개): `L5-1.mp3` … `L7-3.mp3` 9개. anon SELECT만. 원본은 `2학기 듣기/2025년도 자료/3. 과제 자료/교과서 듣기 음원/Lesson N/02_*_B.mp3, 04_*_B.mp3, 05_Real Life Talk.mp3`에서 복사한다.
-- `recordings` 버킷(비공개): 일반 anon은 INSERT만, 교사 자격을 확인한 요청에는 제출 기록에 참조된 파일의 SELECT도 허용한다. 덮어쓰기는 불가하다. 경로 `exam/3-04/3-04-12/1_L5-1.wav`, `exam/3-04/3-04-12/2_L7-3.wav`, `practice/3-04/3-04-12/<timestamp>_L6-2.wav`. 파일 크기 제한 20MB.
+- `recordings` 버킷(비공개): 일반 anon은 INSERT만, 교사 자격을 확인한 요청에는 현재·반환 제출에 참조된 파일의 SELECT도 허용한다. 덮어쓰기는 불가하다. 본 평가 새 경로는 `exam/3-04/3-04-12/<attempt-uuid>/1_L5-1.wav`, `exam/3-04/3-04-12/<attempt-uuid>/2_L7-3.wav`이며, 같은 제출의 업로드 재시도는 같은 경로를 쓴다. 모의 경로는 `practice/3-04/3-04-12/<timestamp>_L6-2.wav`. 파일 크기 제한 20MB.
 
 ### 4.4 비밀 정보
 

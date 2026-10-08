@@ -21,7 +21,12 @@
         <option value="3">3반</option><option value="4">4반</option>
         <option value="5">5반</option><option value="6">6반</option>
       </select></label></p>
-      <p><label>번호 <input type="number" name="num" min="1" max="40" required></label></p>
+      <div class="number-field">
+        <label for="student-number" id="number-label">번호</label>
+        <input type="text" id="student-number" name="num" inputmode="numeric" autocomplete="off"
+          role="combobox" aria-expanded="false" aria-controls="number-options" aria-autocomplete="none" required>
+        <ul id="number-options" class="number-options" role="listbox" aria-labelledby="number-label" hidden></ul>
+      </div>
       <p><label>이름 <input type="text" name="name" autocomplete="off" required></label></p>
       <p id="entry-error" class="error"></p>
       <button type="submit">입장하기</button>
@@ -92,6 +97,14 @@
     <h2 id="confirm-title">제출 확인</h2>
     <p>제출하면 다시 녹음할 수 없습니다. 제출할까요?</p>
     <p><button value="cancel">취소하기</button> <button value="ok" id="confirm-ok">제출하기</button></p>
+  </form>
+</dialog>
+
+<dialog id="return-dialog" aria-labelledby="return-title" aria-describedby="return-detail">
+  <form method="dialog">
+    <h2 id="return-title">제출 되돌려주기</h2>
+    <p id="return-detail"></p>
+    <p><button value="cancel" id="return-cancel">취소하기</button> <button value="ok">되돌려주기</button></p>
   </form>
 </dialog>
 

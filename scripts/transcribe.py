@@ -1,8 +1,9 @@
-"""폴더의 WAV를 ElevenLabs Scribe로 전사해 <stem>.scribe.json으로 캐시한다. 캐시가 있으면 호출하지 않는다.
+"""폴더의 WAV를 ElevenLabs Scribe로 전사한다. 현재 음원과 일치하는 캐시를 재사용한다.
 
 사용: python scripts/transcribe.py <폴더>
 """
 import json
+import hashlib
 import os
 import sys
 import time
@@ -44,11 +45,36 @@ def call_scribe(wav: Path) -> dict:
         raise RuntimeError(f"{wav.name}: {r.status_code} {r.text[:200]}")
 
 
-def transcribe_file(wav: Path) -> dict:
+def recording_metadata(wav: Path) -> dict:
+    metadata = wav.with_suffix(".json")
+    return json.loads(metadata.read_text(encoding="utf-8")) if metadata.exists() else {}
+
+
+def cached_transcript(wav: Path) -> dict | None:
+    info = recording_metadata(wav)
+    if info.get("returned"):
+        return None
     cache = wav.with_name(wav.stem + ".scribe.json")
     if cache.exists():
-        return json.loads(cache.read_text(encoding="utf-8"))
+        data = json.loads(cache.read_text(encoding="utf-8"))
+        digest = data.get("_source_sha256")
+        if digest is None and not info.get("source_file"):
+            return data
+        if digest is not None and wav.exists() and digest == hashlib.sha256(wav.read_bytes()).hexdigest():
+            return data
+    return None
+
+
+def transcribe_file(wav: Path) -> dict | None:
+    if recording_metadata(wav).get("returned"):
+        return None
+    cached = cached_transcript(wav)
+    if cached is not None:
+        return cached
+    digest = hashlib.sha256(wav.read_bytes()).hexdigest()
     data = call_scribe(wav)
+    data["_source_sha256"] = digest
+    cache = wav.with_name(wav.stem + ".scribe.json")
     cache.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return data
 
@@ -57,10 +83,10 @@ def main():
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
     folder = Path(sys.argv[1])
-    wavs = sorted(folder.rglob("*.wav"))
+    wavs = sorted(w for w in folder.rglob("*.wav") if not recording_metadata(w).get("returned"))
     done = called = 0
     for w in wavs:
-        had = w.with_name(w.stem + ".scribe.json").exists()
+        had = cached_transcript(w) is not None
         try:
             transcribe_file(w)
             done += 1
