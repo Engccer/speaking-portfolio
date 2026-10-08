@@ -2,5 +2,5 @@
   "name": "speaking-portfolio",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test tests/js/" }
+  "scripts": { "test": "node --test \"tests/js/*.test.mjs\"" }
 }
