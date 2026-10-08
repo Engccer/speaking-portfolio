@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 저장소는 공개. 학생 이름, 음원, 서비스 키, ElevenLabs 키, 사용자 홈 절대경로를 커밋하지 않는다. 커밋 전 `python ~/.claude/skills/sanitize-for-release/scripts/scan_traces.py .` 종료 코드 0.
+- 저장소는 공개. 학생 이름, 음원, 서비스 키, ElevenLabs 키, 사용자 홈 절대경로를 커밋하지 않는다. 커밋 전 `python ~/.claude/skills/sanitize-for-release/scripts/scan_traces.py .` 종료 코드 0. <!-- sanitize: allow 저자 머신 전용 작업 지침 -->
 - 페이지에 노출되는 비밀은 Supabase URL과 anon 키뿐(`config.js`).
 - 외부 스크립트는 jsdelivr의 고정 버전 supabase-js 하나, 스타일시트는 Google Fonts만.
 - UI 컨트롤 라벨에 이모지 금지, em dash(—) 금지(사람이 읽는 문구·안내문).
@@ -20,7 +20,7 @@
 - 학생 앱은 Chrome(크롬북)만 지원. 녹음 포맷 `audio/webm;codecs=opus`, 제출 포맷 16kHz 모노 PCM16 WAV.
 - 채점 기본 임계값: `match_ratio >= 0.75`, `max_gap <= 2.0`, `wpm >= 60`. 편 점수표: 만족 9~10 → 10, N(1~8) → N+1, 0 → 1, 미제출 0. 최종 = 두 편 평균을 `floor(x + 0.5)`.
 - 대화문 9편 ID와 순서: `L5-1, L5-2, L5-3, L6-1, L6-2, L6-3, L7-1, L7-2, L7-3`(L6-3은 미술관 안내 독백). 편마다 `expressions`는 정확히 10개.
-- 커밋 메시지 끝에 `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. `git add -A` 금지, 경로를 명시해 커밋.
+- 커밋 메시지 끝에 `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. `git add -A` 금지, 경로를 명시해 커밋. <!-- sanitize: allow 저자 머신 전용 작업 지침 -->
 - 병렬 세션 분할 근거: Task 1~3이 끝나면 **앱 트랙(Task 4~6)** 과 **스크립트 트랙(Task 7~10)** 은 파일이 겹치지 않고 `data/dialogues.json`·`supabase/migrations/0001_init.sql`만 공유하므로 별도 세션(worktree)에서 병렬 진행 가능. Task 11은 둘 다 끝난 뒤.
 
 ## Review Focus
@@ -45,7 +45,7 @@
 - [ ] **Step 1: CLAUDE.md 작성 (접근성 헌장 import 포함)**
 
 ```markdown
-@~/.claude/ACCESSIBILITY.md
+@~/.claude/ACCESSIBILITY.md <!-- sanitize: allow 저자 머신 전용 작업 지침 -->
 
 # speaking-portfolio
 
@@ -69,7 +69,7 @@
 
 ## 규칙
 
-- 공개 저장소다. 학생 이름·음원·키·사용자 홈 경로를 커밋하지 않는다. 커밋 전 `python ~/.claude/skills/sanitize-for-release/scripts/scan_traces.py .`.
+- 공개 저장소다. 학생 이름·음원·키·사용자 홈 경로를 커밋하지 않는다. 커밋 전 `python ~/.claude/skills/sanitize-for-release/scripts/scan_traces.py .`. <!-- sanitize: allow 저자 머신 전용 작업 지침 -->
 - 접근성 헌장을 따른다. 라벨에 이모지 금지, em dash 금지.
 - 채점 임계값은 `scripts/scoring.json`에만 둔다.
 ```
@@ -135,7 +135,7 @@ Expected: pytest `no tests ran`, node `pass 0`(tests/js 비어 있으면 디렉�
 - [ ] **Step 4: 커밋**
 
 ```bash
-python ~/.claude/skills/sanitize-for-release/scripts/scan_traces.py .
+python ~/.claude/skills/sanitize-for-release/scripts/scan_traces.py . <!-- sanitize: allow 저자 머신 전용 작업 지침 -->
 git add CLAUDE.md README.md package.json requirements.txt tests/conftest.py tests/__init__.py config.example.js .env.example .gitignore
 git commit -m "chore: 저장소 골격과 테스트 환경"
 ```
