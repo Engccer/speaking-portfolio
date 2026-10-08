@@ -8,14 +8,13 @@
 
 범위 안:
 
-- 정적 웹앱(학생용): 입장, 모의 평가, 본 평가, 제출.
+- 정적 웹앱: 학생 입장·모의 평가·본 평가·제출, 교사 제출 현황·녹음 재생·반별 평가 개방.
 - Supabase 프로젝트: 명렬·제출 기록·녹음 파일·공식 음원 보관.
 - 교사 스크립트(Python, 로컬): 다운로드, 전사, 채점, 개방 제어, 재응시 초기화.
 - 대화문 9편의 데이터와 표현 10개 지정.
 
 범위 밖:
 
-- 교사용 웹 화면. 교사 작업은 전부 로컬 스크립트다.
 - 학생 안내문·쿨메시지 문안 작성. 구현 중 안내문 초안에 절차와 표현 목록을 반영하는 것만 포함한다.
 - 플랭스쿨 연동. 플랭 기록은 성적에 쓰지 않는다.
 
@@ -62,7 +61,7 @@ Supabase (학교 계정 프로젝트)
 
 ### 4.1 테이블
 
-`students`: `class smallint`, `number smallint`, `name text`, PK(class, number). anon 접근 전면 차단. 명렬은 `플랭스쿨 연습 기록/<N>반.csv`의 명렬 열에서 교사 스크립트로 적재한다.
+`students`: `class smallint`, `number smallint`, `name text`, `is_teacher boolean default false`, PK(class, number). anon 직접 조회는 차단한다. 명렬은 `플랭스쿨 연습 기록/<N>반.csv`의 명렬 열에서 교사 스크립트로 적재한다. 기존 1반 40번 행에 교사 표시를 두고, 이름은 서버 명렬에서 관리한다.
 
 `settings`: `class smallint PK`, `exam_open boolean default false`. anon 접근 차단, 함수로만 읽는다.
 
@@ -74,12 +73,16 @@ Supabase (학교 계정 프로젝트)
 
 ### 4.2 함수
 
-`check_in(p_class, p_number, p_name)` → `{ok boolean, exam_open boolean, submitted boolean}`. `security definer`. 이름은 공백 제거 후 비교한다. `ok`가 거짓이면 다른 필드는 null. anon에 EXECUTE 허용. 호출 결과는 UI 분기용이고, 실제 보호는 INSERT 정책이 다시 검사한다.
+`check_in(p_class, p_number, p_name)` → `{ok boolean, exam_open boolean, submitted boolean, is_teacher boolean}`. `security definer`. 이름은 공백 제거 후 비교한다. `ok`가 거짓이면 평가 상태는 null, `is_teacher`는 false다. anon에 EXECUTE 허용. 호출 결과는 UI 분기용이고, 실제 보호는 INSERT 정책이 다시 검사한다.
+
+`teacher_dashboard`와 `teacher_set_exam_open`은 반·번호·이름을 받아 서버 명렬의 교사 표시를 확인한다. 전자는 교사 행을 제외한 반별 학생·제출 기록·개방 상태를 반환하고, 후자는 지정 반의 개방 상태를 변경한다. 공개 RPC는 invoker로 두고 권한이 필요한 처리는 비공개 스키마의 definer 함수에서 수행한다. 비밀번호나 별도 Auth 계정은 쓰지 않는다.
+
+녹음 재생 요청은 교사 반·번호·이름을 HTTP 헤더로 전달한다. Storage RLS는 교사 자격과 제출 기록에 실제 참조된 경로를 확인하며, 앱은 300초 유효한 서명 URL을 발급받아 재생한다. 서비스 키는 브라우저에 제공하지 않는다.
 
 ### 4.3 Storage
 
 - `audio` 버킷(비공개): `L5-1.mp3` … `L7-3.mp3` 9개. anon SELECT만. 원본은 `2학기 듣기/2025년도 자료/3. 과제 자료/교과서 듣기 음원/Lesson N/02_*_B.mp3, 04_*_B.mp3, 05_Real Life Talk.mp3`에서 복사한다.
-- `recordings` 버킷(비공개): anon INSERT만, 덮어쓰기 불가. 경로 `exam/3-04/3-04-12/1_L5-1.wav`, `exam/3-04/3-04-12/2_L7-3.wav`, `practice/3-04/3-04-12/<timestamp>_L6-2.wav`. 파일 크기 제한 20MB.
+- `recordings` 버킷(비공개): 일반 anon은 INSERT만, 교사 자격을 확인한 요청에는 제출 기록에 참조된 파일의 SELECT도 허용한다. 덮어쓰기는 불가하다. 경로 `exam/3-04/3-04-12/1_L5-1.wav`, `exam/3-04/3-04-12/2_L7-3.wav`, `practice/3-04/3-04-12/<timestamp>_L6-2.wav`. 파일 크기 제한 20MB.
 
 ### 4.4 비밀 정보
 
@@ -188,4 +191,4 @@ Supabase (학교 계정 프로젝트)
 
 ## 11. 비구현 사항
 
-IndexedDB 복구, 교사 웹 대시보드, 학생 결과 열람, 턴별 공식 음원, 플랭스쿨 연동, 영상 녹화, 전달력의 시선 항목 판정.
+IndexedDB 복구, 학생 결과 열람, 턴별 공식 음원, 플랭스쿨 연동, 영상 녹화, 전달력의 시선 항목 판정.

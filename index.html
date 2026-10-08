@@ -15,19 +15,16 @@
   <section id="screen-entry" class="screen">
     <h2 tabindex="-1">입장</h2>
     <form id="entry-form">
-      <fieldset>
-        <legend>반</legend>
-        <label><input type="radio" name="cls" value="1" required> 1반</label>
-        <label><input type="radio" name="cls" value="2"> 2반</label>
-        <label><input type="radio" name="cls" value="3"> 3반</label>
-        <label><input type="radio" name="cls" value="4"> 4반</label>
-        <label><input type="radio" name="cls" value="5"> 5반</label>
-        <label><input type="radio" name="cls" value="6"> 6반</label>
-      </fieldset>
+      <p><label>반 <select name="cls" required>
+        <option value="">반 선택</option>
+        <option value="1">1반</option><option value="2">2반</option>
+        <option value="3">3반</option><option value="4">4반</option>
+        <option value="5">5반</option><option value="6">6반</option>
+      </select></label></p>
       <p><label>번호 <input type="number" name="num" min="1" max="40" required></label></p>
       <p><label>이름 <input type="text" name="name" autocomplete="off" required></label></p>
       <p id="entry-error" class="error"></p>
-      <button type="submit">확인</button>
+      <button type="submit">입장하기</button>
     </form>
   </section>
 
@@ -36,28 +33,28 @@
     <p id="mode-greeting"></p>
     <p id="mode-note"></p>
     <p>
-      <button type="button" id="btn-practice">모의 평가</button>
-      <button type="button" id="btn-exam" disabled>본 평가</button>
+      <button type="button" id="btn-practice">모의 평가 참여하기</button>
+      <button type="button" id="btn-exam" disabled>본 평가 참여하기</button>
     </p>
   </section>
 
   <section id="screen-mic" class="screen" hidden>
     <h2 tabindex="-1">마이크 준비</h2>
-    <p>헤드폰을 연결하고 [마이크 테스트]를 누르세요. 3초 동안 녹음한 뒤 자동으로 들려줍니다.</p>
+    <p>헤드폰을 연결하고 [마이크 테스트하기]를 누르세요. 3초 동안 녹음한 뒤 자동으로 들려줍니다.</p>
     <p id="mic-status"></p>
     <p>
-      <button type="button" id="btn-mic-test">마이크 테스트</button>
-      <button type="button" id="btn-mic-next" disabled>시작</button>
+      <button type="button" id="btn-mic-test">마이크 테스트하기</button>
+      <button type="button" id="btn-mic-next" disabled>녹음 시작하기</button>
     </p>
   </section>
 
   <section id="screen-record" class="screen" hidden>
     <h2 tabindex="-1" id="record-title"></h2>
     <p id="record-source"></p>
-    <p><button type="button" id="btn-play-all">전체 듣기</button></p>
+    <p><button type="button" id="btn-play-all">공식 음원 재생하기</button></p>
     <ol id="unit-list" class="units"></ol>
     <p>
-      <button type="button" id="btn-prev-dialogue" hidden>대화 1로 돌아가기</button>
+      <button type="button" id="btn-prev-dialogue" hidden>대화 1 녹음하기</button>
       <button type="button" id="btn-next" disabled></button>
     </p>
   </section>
@@ -65,16 +62,28 @@
   <section id="screen-submit" class="screen" hidden>
     <h2 tabindex="-1">제출</h2>
     <ul id="submit-summary"></ul>
+    <p><button type="button" id="btn-preview">내 녹음 전체 재생하기</button></p>
     <p id="submit-status"></p>
     <p>
-      <button type="button" id="btn-back-record">녹음으로 돌아가기</button>
-      <button type="button" id="btn-submit">제출</button>
+      <button type="button" id="btn-back-record">녹음 수정하기</button>
+      <button type="button" id="btn-submit">제출하기</button>
     </p>
   </section>
 
   <section id="screen-done" class="screen" hidden>
     <h2 tabindex="-1">제출 완료</h2>
     <p id="done-text"></p>
+    <p><button type="button" id="btn-restart" hidden>처음부터 참여하기</button></p>
+  </section>
+
+  <section id="screen-teacher" class="screen" hidden>
+    <h2 tabindex="-1">교사 대시보드</h2>
+    <p>
+      <button type="button" id="btn-teacher-refresh">현황 새로고침하기</button>
+      <button type="button" id="btn-teacher-exit">퇴장하기</button>
+    </p>
+    <p id="teacher-status"></p>
+    <div id="teacher-classes"></div>
   </section>
 </main>
 
@@ -82,7 +91,7 @@
   <form method="dialog">
     <h2 id="confirm-title">제출 확인</h2>
     <p>제출하면 다시 녹음할 수 없습니다. 제출할까요?</p>
-    <p><button value="cancel">취소</button> <button value="ok" id="confirm-ok">제출</button></p>
+    <p><button value="cancel">취소하기</button> <button value="ok" id="confirm-ok">제출하기</button></p>
   </form>
 </dialog>
 
