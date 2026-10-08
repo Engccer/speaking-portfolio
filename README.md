@@ -4,7 +4,8 @@
 
 ## 명령
 
-- `python -m pytest -q` : Python 테스트(채점·다운로드·전사 캐시, 실서버 보안 검증)
+- `pip install -r requirements.txt` : 교사 스크립트·테스트 의존성
+- `python -m pytest -q` : Python 테스트(채점·다운로드·전사 캐시, 실서버 보안 검증은 `.env`·`config.js`가 있을 때만)
 - `npm test` : 앱 순수 로직 테스트(추첨, WAV 병합·인코딩)
 - `python -m http.server 8765` 후 `http://localhost:8765` : 로컬 실행(`config.example.js`를 `config.js`로 복사해 채운다)
 
@@ -18,7 +19,7 @@
 
 `main`에 push하면 `.github/workflows/pages.yml`이 GitHub Secrets(`SUPABASE_URL`, `SUPABASE_ANON_KEY`)로 `config.js`를 만들어 앱 파일만 GitHub Pages에 올린다. 주소: https://engccer.github.io/speaking-portfolio/
 
-처음 한 번: 저장소 Settings > Secrets and variables > Actions에 두 시크릿을 넣고, Settings > Pages의 Source를 "GitHub Actions"로 바꾼다.
+처음 한 번: 저장소 Settings > Secrets and variables > Actions에 두 시크릿을 넣고, Settings > Pages의 Source를 "GitHub Actions"로 바꾼다. Supabase 프로젝트·키·계정 분리는 `supabase/README.md`.
 
 ## 수업 당일 운영
 
