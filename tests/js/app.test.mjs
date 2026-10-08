@@ -34,6 +34,7 @@ function app(t, overrides = {}) {
   Object.assign(w, {
     mergeTracks, encodeWav, initNumberCombobox,
     startCapture: (stream, handlers) => startCapture(stream, handlers, w.MediaRecorder),
+    startMicMeter: () => () => {},
     fetch: async () => ({ json: async () => dialogues }),
     checkIn: async () => ({ ok: true, class_open: true, submitted: false, is_teacher: false }),
     getTeacherDashboard: async () => ({ classes: [{ class: 1, class_open: false, students: [
@@ -161,7 +162,12 @@ test("mobile mic test provides manual playback when autoplay is blocked", async 
   const timer = a.w.setTimeout.bind(a.w);
   a.w.setTimeout = (fn, delay, ...args) => delay === 3000 ? (endTest = fn, 0) : timer(fn, delay, ...args);
   a.$("btn-mic-test").focus(); a.$("btn-mic-test").click(); await settle();
-  endTest(); await settle();
+  assert.equal(a.$("mic-indicator").hidden, false);
+  assert.equal(a.$("mic-indicator").getAttribute("aria-hidden"), "true");
+  endTest();
+  assert.equal(a.$("mic-indicator").hidden, true);
+  await settle();
+  assert.equal(a.$("mic-indicator").hidden, true);
   assert.equal(a.$("mic-playback").hidden, false);
   assert.equal(a.$("mic-playback").controls, true);
   assert.equal(a.$("btn-mic-next").disabled, false);

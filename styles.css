@@ -24,6 +24,12 @@ fieldset label { display:inline-flex; align-items:center; min-width:44px; min-he
 .units li.recorded { border-color:var(--ok); }
 audio { display:block; width:100%; max-width:24rem; margin-block:12px; }
 audio[hidden] { display:none; }
+.mic-indicator { display:flex; align-items:center; gap:12px; width:100%; max-width:24rem; min-height:64px; margin-block:12px; padding:10px 14px; border:1px solid #ebcbd0; border-radius:12px; background:#fff7f8; }
+.mic-indicator[hidden] { display:none; }
+.mic-indicator canvas { display:block; width:100%; min-width:0; height:40px; }
+.recording-dot { flex:0 0 9px; width:9px; height:9px; border-radius:50%; background:#b42332; animation:recording-pulse 1.6s ease-in-out infinite; }
+@keyframes recording-pulse { 50% { opacity:.35; } }
+@media (prefers-reduced-motion:reduce) { .recording-dot { animation:none; } }
 dialog { width:min(32rem, calc(100% - 32px)); max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px); overflow:auto; border:2px solid var(--fg); border-radius:12px; padding:20px; font-size:1.05rem; }
 dialog::backdrop { background:rgba(0,0,0,.5); }
 .teacher-class { border-top:1px solid #ccc; padding:12px 0; }

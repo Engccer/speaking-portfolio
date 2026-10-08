@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>영어 말하기 녹음</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap">
-<link rel="stylesheet" href="styles.css?v=mobile-recording">
+<link rel="stylesheet" href="styles.css?v=mic-waveform">
 </head>
 <body>
 <header><h1>3학년 영어B 말하기 포트폴리오</h1></header>
@@ -47,6 +47,10 @@
     <h2 tabindex="-1">마이크 준비</h2>
     <p>헤드폰을 연결하고 [마이크 테스트하기]를 누르세요. 3초 동안 녹음한 뒤 자신의 목소리를 확인하세요.</p>
     <p id="mic-status"></p>
+    <div id="mic-indicator" class="mic-indicator" hidden aria-hidden="true">
+      <span class="recording-dot"></span>
+      <canvas id="mic-waveform" width="512" height="80"></canvas>
+    </div>
     <audio id="mic-playback" controls hidden aria-label="마이크 테스트 녹음"></audio>
     <p>
       <button type="button" id="btn-mic-test">마이크 테스트하기</button>
@@ -109,6 +113,6 @@
   </form>
 </dialog>
 
-<script type="module" src="app.js?v=mobile-recording"></script>
+<script type="module" src="app.js?v=mic-waveform"></script>
 </body>
 </html>

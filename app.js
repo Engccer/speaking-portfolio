@@ -1,6 +1,7 @@
 import { checkIn, downloadAudio, getClient, getTeacherDashboard, setClassOpen, getRecordingUrl, returnSubmission } from "./lib/supa.js?v=class-admission";
 import { initNumberCombobox } from "./lib/number-combobox.js";
 import { startCapture } from "./lib/recording.js";
+import { startMicMeter } from "./lib/mic-meter.js";
 import { drawExam, drawPractice } from "./lib/draw.js";
 import { mergeTracks, encodeWav } from "./lib/wav.js";
 
@@ -113,6 +114,11 @@ $("btn-exam").addEventListener("click", () => chooseMode("exam"));
 
 // 마이크 준비
 let micBusy = false, micCapture = null, micTimer = null, micUrl = null;
+let stopMicMeter = null;
+function stopMicVisualization() {
+  stopMicMeter?.(); stopMicMeter = null;
+  $("mic-indicator").hidden = true;
+}
 function releaseMicrophone() {
   state.stream?.getTracks().forEach((track) => track.stop());
   state.stream = null;
@@ -136,6 +142,7 @@ $("btn-mic-test").addEventListener("click", async () => {
   if (micUrl) { URL.revokeObjectURL(micUrl); micUrl = null; }
   const release = () => {
     clearTimeout(micTimer); micTimer = null; micCapture = null; micBusy = false;
+    stopMicVisualization();
     releaseMicrophone();
     testBtn.removeAttribute("aria-disabled");
   };
@@ -166,7 +173,12 @@ $("btn-mic-test").addEventListener("click", async () => {
       },
       onError: failed,
     });
-    micTimer = setTimeout(() => { micCapture?.stop(); releaseMicrophone(); }, 3000);
+    $("mic-indicator").hidden = false;
+    stopMicMeter = startMicMeter($("mic-waveform"), stream);
+    micTimer = setTimeout(() => {
+      status.textContent = "녹음 확인 중";
+      micCapture?.stop(); stopMicVisualization(); releaseMicrophone();
+    }, 3000);
   } catch (err) { failed(err); }
 });
 $("btn-mic-next").addEventListener("click", () => { $("mic-playback").pause(); showRecordScreen(); });
@@ -338,6 +350,7 @@ $("unit-list").addEventListener("click", async (e) => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) return;
   micCapture?.stop();
+  stopMicVisualization();
   recorder?.stop();
   stopPlayAll(); stopUnitPlayback(); $("mic-playback").pause();
   releaseMicrophone();
