@@ -6,3 +6,4 @@ config.js
 node_modules/
 .pytest_cache/
 tests/fixtures/*.wav
+supabase/.temp/
