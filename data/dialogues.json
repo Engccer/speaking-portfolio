@@ -1,0 +1,937 @@
+[
+  {
+    "id": "L5-1",
+    "title": "Jim Abbott",
+    "source": "Lesson 5 / Listen and Speak 1 B / p.86",
+    "audio": "L5-1.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "Jiho, what are you reading?"
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "I'm reading a book about a baseball player named Jim Abbott."
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "Oh, the man who was born without a right hand?"
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "That's right. He tried really hard and even won the MVP award."
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "Yeah. His story was made into a movie. I'm going to watch it this Saturday."
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "Really? What's the title?"
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "Our Hero. I'm really looking forward to watching it."
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "Can I join you?"
+      },
+      {
+        "n": 9,
+        "speaker": "A",
+        "text": "Sure. See you on Saturday."
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Jiho, what are you reading?"
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "I'm reading a book about a baseball player named Jim Abbott."
+      },
+      {
+        "n": 3,
+        "unit": 3,
+        "text": "Oh, the man who was born without a right hand?"
+      },
+      {
+        "n": 4,
+        "unit": 4,
+        "text": "That's right. He tried really hard and even won the MVP award."
+      },
+      {
+        "n": 5,
+        "unit": 5,
+        "text": "Yeah. His story was made into a movie."
+      },
+      {
+        "n": 6,
+        "unit": 5,
+        "text": "I'm going to watch it this Saturday."
+      },
+      {
+        "n": 7,
+        "unit": 6,
+        "text": "Really? What's the title?"
+      },
+      {
+        "n": 8,
+        "unit": 7,
+        "text": "Our Hero. I'm really looking forward to watching it."
+      },
+      {
+        "n": 9,
+        "unit": 8,
+        "text": "Can I join you?"
+      },
+      {
+        "n": 10,
+        "unit": 9,
+        "text": "Sure. See you on Saturday."
+      }
+    ]
+  },
+  {
+    "id": "L5-2",
+    "title": "Singing Contest",
+    "source": "Lesson 5 / Listen and Speak 2 B / p.87",
+    "audio": "L5-2.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "Alex, I'm going to take part in a singing contest next Monday."
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "That's great, Sumin!"
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "You know how to play the guitar, right?"
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "Yes, I've played the guitar for 3 years."
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "Great. Can you play the guitar while I sing in the contest?"
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "I'd love to, but I can't. I hurt my hand in gym class yesterday."
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "Oh! I'm sorry to hear that."
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "Thanks. But I'll be there to cheer for you."
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Alex, I'm going to take part in a singing contest next Monday."
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "That's great, Sumin!"
+      },
+      {
+        "n": 3,
+        "unit": 3,
+        "text": "You know how to play the guitar, right?"
+      },
+      {
+        "n": 4,
+        "unit": 4,
+        "text": "Yes, I've played the guitar for 3 years."
+      },
+      {
+        "n": 5,
+        "unit": 5,
+        "text": "Great. Can you play the guitar"
+      },
+      {
+        "n": 6,
+        "unit": 5,
+        "text": "while I sing in the contest?"
+      },
+      {
+        "n": 7,
+        "unit": 6,
+        "text": "I'd love to, but I can't."
+      },
+      {
+        "n": 8,
+        "unit": 6,
+        "text": "I hurt my hand in gym class yesterday."
+      },
+      {
+        "n": 9,
+        "unit": 7,
+        "text": "Oh! I'm sorry to hear that."
+      },
+      {
+        "n": 10,
+        "unit": 8,
+        "text": "Thanks. But I'll be there to cheer for you."
+      }
+    ]
+  },
+  {
+    "id": "L5-3",
+    "title": "Billy Elliot",
+    "source": "Lesson 5 / Real Life Talk / p.88",
+    "audio": "L5-3.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "Hi, Tony! What are you going to do this weekend?"
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "I'm going to watch the musical, Billy Elliot."
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "Billy Elliot? What is it about?"
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "It's about a boy who became a famous dancer. I'm looking forward to watching it."
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "Sounds interesting. Who is the main actor?"
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "Jason Kim. He's a great dancer."
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "He's my favorite actor. I watched his musical last year."
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "Oh, really? Do you want to join me?"
+      },
+      {
+        "n": 9,
+        "speaker": "A",
+        "text": "I'd love to, but I can't. I have volunteer work this weekend."
+      },
+      {
+        "n": 10,
+        "speaker": "B",
+        "text": "Okay. Maybe next time!"
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Hi, Tony! What are you going to do this weekend?"
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "I'm going to watch the musical, Billy Elliot."
+      },
+      {
+        "n": 3,
+        "unit": 3,
+        "text": "Billy Elliot? What is it about?"
+      },
+      {
+        "n": 4,
+        "unit": 4,
+        "text": "It's about a boy who became a famous dancer. I'm looking forward to watching it."
+      },
+      {
+        "n": 5,
+        "unit": 5,
+        "text": "Sounds interesting. Who is the main actor?"
+      },
+      {
+        "n": 6,
+        "unit": 6,
+        "text": "Jason Kim. He's a great dancer."
+      },
+      {
+        "n": 7,
+        "unit": 7,
+        "text": "He's my favorite actor. I watched his musical last year."
+      },
+      {
+        "n": 8,
+        "unit": 8,
+        "text": "Oh, really? Do you want to join me?"
+      },
+      {
+        "n": 9,
+        "unit": 9,
+        "text": "I'd love to, but I can't. I have volunteer work this weekend."
+      },
+      {
+        "n": 10,
+        "unit": 10,
+        "text": "Okay. Maybe next time!"
+      }
+    ]
+  },
+  {
+    "id": "L6-1",
+    "title": "Folk Village",
+    "source": "Lesson 6 / Listen and Speak 1 B / p.104",
+    "audio": "L6-1.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "Sumin, my train is leaving in five minutes."
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "I hope you enjoyed your trip, Daniel."
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "Of course, I did."
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "Which place did you like most in my town?"
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "I liked the folk village most."
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "Yeah, it's the most popular place here."
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "I really liked walking around in hanbok. I looked really cool."
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "I'm glad to hear that."
+      },
+      {
+        "n": 9,
+        "speaker": "A",
+        "text": "Thank you for showing me around."
+      },
+      {
+        "n": 10,
+        "speaker": "B",
+        "text": "It was my pleasure. Have a safe trip."
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Sumin, my train is leaving in five minutes."
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "I hope you enjoyed your trip, Daniel."
+      },
+      {
+        "n": 3,
+        "unit": 3,
+        "text": "Of course, I did."
+      },
+      {
+        "n": 4,
+        "unit": 4,
+        "text": "Which place did you like most in my town?"
+      },
+      {
+        "n": 5,
+        "unit": 5,
+        "text": "I liked the folk village most."
+      },
+      {
+        "n": 6,
+        "unit": 6,
+        "text": "Yeah, it's the most popular place here."
+      },
+      {
+        "n": 7,
+        "unit": 7,
+        "text": "I really liked walking around in hanbok. I looked really cool."
+      },
+      {
+        "n": 8,
+        "unit": 8,
+        "text": "I'm glad to hear that."
+      },
+      {
+        "n": 9,
+        "unit": 9,
+        "text": "Thank you for showing me around."
+      },
+      {
+        "n": 10,
+        "unit": 10,
+        "text": "It was my pleasure. Have a safe trip."
+      }
+    ]
+  },
+  {
+    "id": "L6-2",
+    "title": "Concert Tickets",
+    "source": "Lesson 6 / Listen and Speak 2 B / p.105",
+    "audio": "L6-2.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "The tickets for the World Music Concert are on sale now."
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "Really? Let's book the tickets online right away."
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "Okay. Let's see... There are still tickets left for November 5th."
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "Sounds good. Let's get two student tickets."
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "Oh, do you mind if I bring my little brother?"
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "Not at all. But it says that you are not allowed to bring children under 8."
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "No problem. He's 10."
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "Okay, I'll add one child ticket. The total price is 25 dollars."
+      },
+      {
+        "n": 9,
+        "speaker": "A",
+        "text": "Great."
+      },
+      {
+        "n": 10,
+        "speaker": "B",
+        "text": "I can't wait to see the concert!"
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "The tickets for the World Music Concert are on sale now."
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "Really? Let's book the tickets online right away."
+      },
+      {
+        "n": 3,
+        "unit": 3,
+        "text": "Okay. Let's see... There are still tickets left for November 5th."
+      },
+      {
+        "n": 4,
+        "unit": 4,
+        "text": "Sounds good. Let's get two student tickets."
+      },
+      {
+        "n": 5,
+        "unit": 5,
+        "text": "Oh, do you mind if I bring my little brother?"
+      },
+      {
+        "n": 6,
+        "unit": 6,
+        "text": "Not at all. But it says that you are not allowed to bring children under 8."
+      },
+      {
+        "n": 7,
+        "unit": 7,
+        "text": "No problem. He's 10."
+      },
+      {
+        "n": 8,
+        "unit": 8,
+        "text": "Okay, I'll add one child ticket. The total price is 25 dollars."
+      },
+      {
+        "n": 9,
+        "unit": 9,
+        "text": "Great."
+      },
+      {
+        "n": 10,
+        "unit": 10,
+        "text": "I can't wait to see the concert!"
+      }
+    ]
+  },
+  {
+    "id": "L6-3",
+    "title": "Art Museum Tour",
+    "source": "Lesson 6 / Real Life Talk / p.106",
+    "audio": "L6-3.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "W",
+        "text": "Hello, students! Thank you for visiting our art museum."
+      },
+      {
+        "n": 2,
+        "speaker": "W",
+        "text": "This museum opened in 1995."
+      },
+      {
+        "n": 3,
+        "speaker": "W",
+        "text": "Since then, it has exhibited many famous artworks."
+      },
+      {
+        "n": 4,
+        "speaker": "W",
+        "text": "Today, you will see some famous artworks from the art books."
+      },
+      {
+        "n": 5,
+        "speaker": "W",
+        "text": "Before we begin the tour, let me remind you of a basic rule."
+      },
+      {
+        "n": 6,
+        "speaker": "W",
+        "text": "You can take pictures of the artworks, but you're not allowed to touch them."
+      },
+      {
+        "n": 7,
+        "speaker": "W",
+        "text": "Now let's start the tour."
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Hello, students!"
+      },
+      {
+        "n": 2,
+        "unit": 1,
+        "text": "Thank you for visiting our art museum."
+      },
+      {
+        "n": 3,
+        "unit": 2,
+        "text": "This museum opened in 1995."
+      },
+      {
+        "n": 4,
+        "unit": 3,
+        "text": "Since then, it has exhibited many famous artworks."
+      },
+      {
+        "n": 5,
+        "unit": 4,
+        "text": "Today, you will see some famous artworks from the art books."
+      },
+      {
+        "n": 6,
+        "unit": 5,
+        "text": "Before we begin the tour,"
+      },
+      {
+        "n": 7,
+        "unit": 5,
+        "text": "let me remind you of a basic rule."
+      },
+      {
+        "n": 8,
+        "unit": 6,
+        "text": "You can take pictures of the artworks,"
+      },
+      {
+        "n": 9,
+        "unit": 6,
+        "text": "but you're not allowed to touch them."
+      },
+      {
+        "n": 10,
+        "unit": 7,
+        "text": "Now let's start the tour."
+      }
+    ]
+  },
+  {
+    "id": "L7-1",
+    "title": "Baby Penguins",
+    "source": "Lesson 7 / Listen and Speak 1 B / p.122",
+    "audio": "L7-1.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "Look at the baby penguins on TV. They're so cute."
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "Yes, but they look very cold out there."
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "Yeah, the South Pole is the coldest place on Earth."
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "I wonder how cold it is there."
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "The average temperature is about −58℃ in July and −26℃ in December."
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "Oh, then, July is colder than December there. Interesting!"
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "Yes. Although it's very cold there, it doesn't snow much."
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "That's interesting, too!"
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Look at the baby penguins on TV. They're so cute."
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "Yes, but they look very cold out there."
+      },
+      {
+        "n": 3,
+        "unit": 3,
+        "text": "Yeah, the South Pole is the coldest place on Earth."
+      },
+      {
+        "n": 4,
+        "unit": 4,
+        "text": "I wonder how cold it is there."
+      },
+      {
+        "n": 5,
+        "unit": 5,
+        "text": "The average temperature is about −58℃ in July"
+      },
+      {
+        "n": 6,
+        "unit": 5,
+        "text": "and −26℃ in December."
+      },
+      {
+        "n": 7,
+        "unit": 6,
+        "text": "Oh, then, July is colder than December there. Interesting!"
+      },
+      {
+        "n": 8,
+        "unit": 7,
+        "text": "Yes. Although it's very cold there,"
+      },
+      {
+        "n": 9,
+        "unit": 7,
+        "text": "it doesn't snow much."
+      },
+      {
+        "n": 10,
+        "unit": 8,
+        "text": "That's interesting, too!"
+      }
+    ]
+  },
+  {
+    "id": "L7-2",
+    "title": "Namsan Hiking",
+    "source": "Lesson 7 / Listen and Speak 2 B / p.123",
+    "audio": "L7-2.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "Sumin, what are you going to do on Sunday?"
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "I'm going to go hiking. Do you want to join me?"
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "I'd love to. Where do you want to go?"
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "I'm thinking of going to Namsan."
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "Oh, the scenery there is so beautiful this time of year."
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "Right. I heard that it's covered with red autumn leaves now."
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "Great. How long does the shortest hiking course take?"
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "The Internet says it takes about two hours."
+      },
+      {
+        "n": 9,
+        "speaker": "A",
+        "text": "Okay, see you on Sunday!"
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Sumin, what are you going to do on Sunday?"
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "I'm going to go hiking."
+      },
+      {
+        "n": 3,
+        "unit": 2,
+        "text": "Do you want to join me?"
+      },
+      {
+        "n": 4,
+        "unit": 3,
+        "text": "I'd love to. Where do you want to go?"
+      },
+      {
+        "n": 5,
+        "unit": 4,
+        "text": "I'm thinking of going to Namsan."
+      },
+      {
+        "n": 6,
+        "unit": 5,
+        "text": "Oh, the scenery there is so beautiful this time of year."
+      },
+      {
+        "n": 7,
+        "unit": 6,
+        "text": "Right. I heard that it's covered with red autumn leaves now."
+      },
+      {
+        "n": 8,
+        "unit": 7,
+        "text": "Great. How long does the shortest hiking course take?"
+      },
+      {
+        "n": 9,
+        "unit": 8,
+        "text": "The Internet says it takes about two hours."
+      },
+      {
+        "n": 10,
+        "unit": 9,
+        "text": "Okay, see you on Sunday!"
+      }
+    ]
+  },
+  {
+    "id": "L7-3",
+    "title": "Camels",
+    "source": "Lesson 7 / Real Life Talk / p.124",
+    "audio": "L7-3.mp3",
+    "units": [
+      {
+        "n": 1,
+        "speaker": "A",
+        "text": "Check out this picture!"
+      },
+      {
+        "n": 2,
+        "speaker": "B",
+        "text": "Wow! The camels are walking in a line in the desert."
+      },
+      {
+        "n": 3,
+        "speaker": "A",
+        "text": "Yeah. The desert looks very hot and dry."
+      },
+      {
+        "n": 4,
+        "speaker": "B",
+        "text": "I wonder how long camels can go without water in the desert."
+      },
+      {
+        "n": 5,
+        "speaker": "A",
+        "text": "Let's find out on the Internet."
+      },
+      {
+        "n": 6,
+        "speaker": "B",
+        "text": "Okay. The Internet says they can go about two weeks without water."
+      },
+      {
+        "n": 7,
+        "speaker": "A",
+        "text": "Wow, that's amazing! Camels are really interesting animals."
+      },
+      {
+        "n": 8,
+        "speaker": "B",
+        "text": "I want to travel with them in the desert someday."
+      }
+    ],
+    "expressions": [
+      {
+        "n": 1,
+        "unit": 1,
+        "text": "Check out this picture!"
+      },
+      {
+        "n": 2,
+        "unit": 2,
+        "text": "Wow! The camels are walking in a line in the desert."
+      },
+      {
+        "n": 3,
+        "unit": 3,
+        "text": "Yeah. The desert looks very hot and dry."
+      },
+      {
+        "n": 4,
+        "unit": 4,
+        "text": "I wonder how long camels can go"
+      },
+      {
+        "n": 5,
+        "unit": 4,
+        "text": "without water in the desert."
+      },
+      {
+        "n": 6,
+        "unit": 5,
+        "text": "Let's find out on the Internet."
+      },
+      {
+        "n": 7,
+        "unit": 6,
+        "text": "Okay. The Internet says they can go about two weeks without water."
+      },
+      {
+        "n": 8,
+        "unit": 7,
+        "text": "Wow, that's amazing!"
+      },
+      {
+        "n": 9,
+        "unit": 7,
+        "text": "Camels are really interesting animals."
+      },
+      {
+        "n": 10,
+        "unit": 8,
+        "text": "I want to travel with them in the desert someday."
+      }
+    ]
+  }
+]
