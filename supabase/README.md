@@ -37,6 +37,8 @@ supabase --profile ~/.supabase/school.yml projects list
    - MCP 플러그인 `apply_migration`에 `migrations/*.sql` 내용을 순서대로 전달
    - `supabase link --project-ref <ref>` → `supabase db push`
    - 대시보드 SQL Editor에 파일 전체를 붙여 넣고 실행
+
+   기존 운영 DB에는 먼저 학교 프로필로 `supabase db push --project-ref <ref> --dry-run --skip-vault`를 실행해 적용 대상을 확인한 뒤 같은 명령에서 `--dry-run`을 빼고 적용한다. 로컬 마이그레이션 파일의 버전은 서버 이력과 같아야 하며, 이미 적용된 파일을 다시 실행하지 않는다. SQL 조회는 `supabase db query --linked --project-ref <ref> --file <검증 SQL>`로 수행한다.
 2. `pip install -r requirements.txt`
 3. `python scripts/seed_students.py "<플랭스쿨 연습 기록 폴더>"` 로 명렬 적재.
 4. `python scripts/upload_audio.py "<교과서 듣기 음원 폴더>"` 로 공식 음원 9개 업로드.

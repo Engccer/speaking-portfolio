@@ -25,7 +25,7 @@
 - 채점 기본 임계값: `match_ratio >= 0.75`, `max_gap <= 2.0`, `wpm >= 60`. 편 점수표: 만족 9~10 → 10, N(1~8) → N+1, 0 → 1, 미제출 0. 최종 = 두 편 평균을 `floor(x + 0.5)`.
 - 대화문 9편 ID와 순서: `L5-1, L5-2, L5-3, L6-1, L6-2, L6-3, L7-1, L7-2, L7-3`(L6-3은 미술관 안내 독백). 편마다 `expressions`는 정확히 10개.
 - 커밋 메시지 끝에 `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. `git add -A` 금지, 경로를 명시해 커밋. <!-- sanitize: allow 저자 머신 전용 작업 지침 -->
-- 병렬 세션 분할 근거: Task 1~3이 끝나면 **앱 트랙(Task 4~6)** 과 **스크립트 트랙(Task 7~10)** 은 파일이 겹치지 않고 `data/dialogues.json`·`supabase/migrations/0001_init.sql`만 공유하므로 별도 세션(worktree)에서 병렬 진행 가능. Task 11은 둘 다 끝난 뒤.
+- 병렬 세션 분할 근거: Task 1~3이 끝나면 **앱 트랙(Task 4~6)** 과 **스크립트 트랙(Task 7~10)** 은 파일이 겹치지 않고 `data/dialogues.json`·`supabase/migrations/20261008202414_init.sql`만 공유하므로 별도 세션(worktree)에서 병렬 진행 가능. Task 11은 둘 다 끝난 뒤.
 
 ## Review Focus
 
@@ -336,7 +336,7 @@ git commit -m "feat: 대화문 9편 데이터와 표현 10개 지정"
 ### Task 3: Supabase 스키마·보안·시드
 
 **Files:**
-- Create: `supabase/migrations/0001_init.sql`, `supabase/README.md`, `scripts/common.py`, `scripts/seed_students.py`, `scripts/upload_audio.py`, `tests/test_rls.py`
+- Create: `supabase/migrations/20261008202414_init.sql`, `supabase/README.md`, `scripts/common.py`, `scripts/seed_students.py`, `scripts/upload_audio.py`, `tests/test_rls.py`
 
 **Interfaces:**
 - Consumes: 사용자가 학교 Google 계정으로 만든 Supabase 프로젝트의 URL, anon 키, 서비스 키(`.env`, `config.js`).
@@ -344,7 +344,7 @@ git commit -m "feat: 대화문 9편 데이터와 표현 10개 지정"
 
 - [ ] **Step 1: 마이그레이션 SQL**
 
-`supabase/migrations/0001_init.sql`:
+`supabase/migrations/20261008202414_init.sql`:
 ```sql
 create extension if not exists pgcrypto;
 
@@ -471,7 +471,7 @@ create policy "anon upload recordings" on storage.objects
 2. Project Settings > API에서 URL, anon 키, service_role 키를 복사해 `config.js`(URL·anon)와 `.env`(URL·service)에 넣는다.
 3. 마이그레이션 적용. 둘 중 하나:
    - `supabase login`(학교 계정) → `supabase link --project-ref <ref>` → `supabase db push`
-   - 또는 대시보드 SQL Editor에 `migrations/0001_init.sql` 전체를 붙여 넣고 실행
+   - 또는 대시보드 SQL Editor에 `migrations/20261008202414_init.sql` 전체를 붙여 넣고 실행
 4. `python scripts/seed_students.py "<플랭스쿨 연습 기록 폴더>"` 로 명렬 적재.
 5. `python scripts/upload_audio.py "<교과서 듣기 음원 폴더>"` 로 공식 음원 9개 업로드.
 6. `python -m pytest tests/test_rls.py -q` 로 보안 정책 검증(실서버 호출, `.env`·`config.js` 필요).
