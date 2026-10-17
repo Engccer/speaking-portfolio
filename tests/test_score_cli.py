@@ -67,3 +67,32 @@ def test_returned_submission_is_missing_without_stale_score(tmp_path):
     assert len(rows) == 2
     assert rows[1][0] == 1 and rows[1][8] == 0 and rows[1][9] == "미제출"
     assert len((tmp_path / "표현별 상세.csv").read_text(encoding="utf-8-sig").splitlines()) == 1
+
+
+
+def _slow_short_units(scribe_path, max_words, spacing=2.4):
+    """단어 수가 max_words 이하인 단위의 단어 간격을 spacing초로 벌린다(단위 창 10초 안에 든다)."""
+    data = json.loads(scribe_path.read_text(encoding="utf-8"))
+    by_unit = {}
+    for w in data["words"]:
+        by_unit.setdefault(int(w["start"] // 10.5), []).append(w)
+    for words in by_unit.values():
+        if len(words) <= max_words:
+            base = words[0]["start"]
+            for k, w in enumerate(words):
+                w["start"], w["end"] = base + k * spacing, base + k * spacing + 0.2
+    scribe_path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_note_config_adds_generous_score_to_remark(tmp_path):
+    # 간격 2.4초는 기본(2.0초)에선 불만족, 후한 기준(2.5초)에선 만족이다.
+    generous = {"match_ratio_min": 0.6, "max_gap_sec": 2.5, "wpm_min": 10}
+    make_student(tmp_path, 4, 5, "차카타", ["L5-1", "L6-1"])
+    make_student(tmp_path, 4, 6, "파하가", ["L5-1", "L6-1"])
+    _slow_short_units(next(tmp_path.glob("3-04/3-04-05 *_1_L5-1.scribe.json")), max_words=0)  # 변경 없음
+    _slow_short_units(next(tmp_path.glob("3-04/3-04-06 *_1_L5-1.scribe.json")), max_words=5)  # 짧은 단위 여러 개
+    score.run(tmp_path, tmp_path, score.DEFAULT_CFG, generous)
+    rows = list(load_workbook(tmp_path / "4반 말하기 채점.xlsx").active.iter_rows(values_only=True))
+    hdr = rows[0]; by_num = {r[0]: dict(zip(hdr, r)) for r in rows[1:]}
+    assert by_num[5]["최종"] == 10 and "후한 기준" not in (by_num[5]["비고"] or "")
+    assert by_num[6]["최종"] < 10 and "후한 기준 적용 시 10점" in by_num[6]["비고"]

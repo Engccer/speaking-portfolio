@@ -28,7 +28,9 @@
 1. 교사 명렬 정보로 입장하고 대시보드에서 해당 반의 `입장 열기` 선택(또는 `python scripts/open.py <반>`)
 2. 학생은 위 주소에서 입장 → 마이크 테스트 → 본 평가
 3. 수업 끝 해당 반의 `마감하기` 선택(또는 `python scripts/close.py <반>`)
-4. `python scripts/download.py --class <반> "<출력 폴더>"` → `python scripts/transcribe.py "<출력 폴더>"` → `python scripts/score.py "<출력 폴더>"`
+4. `python scripts/download.py --class <반> "<출력 폴더>"` → `python scripts/transcribe.py "<출력 폴더>"` → `python scripts/score.py "<출력 폴더>"` `--note-config scripts/scoring_generous.json`
+
+채점표는 `scripts/scoring.json`의 기본 기준(일치율 0.75, 최장 휴지 2.0초, 분당 60단어)으로 점수를 적고, `--note-config`로 준 후한 기준(0.6/2.5/50)에서 최종 점수가 달라지는 학생은 비고에 `후한 기준 적용 시 N점`을 덧붙인다.
 
 학생은 제출 화면에서 `내 녹음 전체 재생하기`로 제출할 병합본을 차례대로 들을 수 있다. 모의 평가는 선택사항이다. 완료 후 `본 평가 시작하기`로 바로 진행하거나 `이전으로 돌아가기`로 입장 상태를 유지한 평가 선택 화면에 돌아간다. 평가 선택 화면에는 서버에 저장된 모의 평가 완료 여부를 표시한다.
 

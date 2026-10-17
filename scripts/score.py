@@ -1,6 +1,8 @@
 """다운로드 폴더의 전사 결과를 채점해 반별 xlsx와 표현별 CSV를 만든다.
 
-사용: python scripts/score.py <다운로드 폴더> [--out <출력 폴더>] [--config scripts/scoring.json]
+사용: python scripts/score.py <다운로드 폴더> [--out <출력 폴더>] [--config scripts/scoring.json] [--note-config scripts/scoring_generous.json]
+
+--note-config를 주면 그 기준으로도 채점해 최종 점수가 다른 학생의 비고에 "후한 기준 적용 시 N점"을 덧붙인다.
 """
 import argparse
 import csv
@@ -63,7 +65,7 @@ def detail(cls, num, name, which, did, e):
             e["match_ratio"], e["max_gap"], e["wpm"], "만족" if e["ok"] else "불만족", e["reason"]]
 
 
-def run(folder: Path, out: Path, cfg: dict):
+def run(folder: Path, out: Path, cfg: dict, note_cfg: dict | None = None):
     students = collect(folder)
     absent = missing(folder)
     detail_rows = []
@@ -94,6 +96,12 @@ def run(folder: Path, out: Path, cfg: dict):
                 row["비고"].append(f"대화{idx} 불만족 {','.join(bad)}")
             detail_rows += [detail(cls, num, s["name"], idx, d["id"], e) for e in r["expressions"]]
         row["최종"] = final_score(scores) if len(scores) == 2 else ""
+        if note_cfg is not None and len(scores) == 2:
+            alt = [score_dialogue(dialogues()[d["id"]], d["scribe"], d["turn_offsets"], note_cfg)["score"]
+                   if d and d["scribe"] is not None else 0 for d in (s["dialogues"].get(1), s["dialogues"].get(2))]
+            alt_final = final_score(alt)
+            if alt_final != row["최종"]:
+                row["비고"].append(f"후한 기준 적용 시 {alt_final}점")
         row["비고"] = "; ".join(row["비고"])
         by_class.setdefault(cls, []).append(row)
     for (cls, num), name in absent.items():
@@ -117,10 +125,11 @@ def run(folder: Path, out: Path, cfg: dict):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("folder"); ap.add_argument("--out"); ap.add_argument("--config")
+    ap.add_argument("folder"); ap.add_argument("--out"); ap.add_argument("--config"); ap.add_argument("--note-config")
     a = ap.parse_args()
     cfg = json.loads(Path(a.config).read_text(encoding="utf-8")) if a.config else DEFAULT_CFG
-    run(Path(a.folder), Path(a.out or a.folder), cfg)
+    note_cfg = json.loads(Path(a.note_config).read_text(encoding="utf-8")) if a.note_config else None
+    run(Path(a.folder), Path(a.out or a.folder), cfg, note_cfg)
 
 
 if __name__ == "__main__":
