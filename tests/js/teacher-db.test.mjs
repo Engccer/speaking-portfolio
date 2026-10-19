@@ -88,6 +88,20 @@ test("점수 RPC는 이름을 재검증하며 자신의 게시 결과만 반환�
   await db.exec("reset role; set role anon;");
 });
 
+test("교사 대시보드는 반·번호별 게시 결과를 보존하고 일반 학생에게는 거부한다", async () => {
+  const {classes} = await rpc('teacher_dashboard');
+  const first = classes.find(c => c.class === 1).students;
+  assert.equal(first[0].published_score.final_score, 9);
+  assert.equal(first[0].published_score.dialogues[0].missed, '2, 3');
+  assert.equal(first[1].published_score.final_score, null);
+  assert.equal(first[1].published_score.note, '재응시');
+  assert.equal(classes.find(c => c.class === 2).students[0].published_score, null);
+  await assert.rejects(() => rpc('teacher_dashboard', student), /교사 정보/);
+  await assert.rejects(() => rpc('teacher_dashboard', [1,40,'틀린 이름']), /교사 정보/);
+  await db.exec("reset role; update public.published_scores set final_score=0 where class=1 and number=1; set role anon;");
+  assert.equal((await rpc('teacher_dashboard')).classes[0].students[0].published_score.final_score, 0);
+});
+
 test("체크인은 DB 교사 표시와 정규화된 이름을 확인한다", async () => {
   assert.equal((await rpc("check_in", [1, 40, "교사　 예시"])).is_teacher, true);
   assert.equal((await rpc("check_in", student)).is_teacher, false);

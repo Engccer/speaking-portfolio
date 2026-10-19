@@ -294,6 +294,46 @@ test("teacher refresh failure clears stale data and reports failure", async (t) 
   assert.match(a.$("teacher-status").textContent, /불러오지 못했습니다/);
 });
 
+test("teacher list exposes only final scores and opens the selected student's details", async (t) => {
+  const scores = [
+    { final_score: 9, note: '', dialogues: [{title: 'Lesson 5-1', score: 9, passed: 8, missed: '2, 3'}] },
+    { final_score: 0, note: '', dialogues: [] },
+    { final_score: null, note: '재응시', dialogues: [] },
+    null,
+    undefined,
+  ];
+  const a = app(t, {
+    checkIn: async () => ({ok: true, is_teacher: true}),
+    getTeacherDashboard: async () => ({classes: [{class: 4, class_open: false, students:
+      scores.map((score, i) => ({number: i + 1, name: `학생 ${i + 1}`, files: [], practice_submissions: [], published_score: score}))
+    }]}),
+  });
+  await a.enter();
+  let rows = a.$('teacher-classes').querySelectorAll('tbody tr');
+  assert.deepEqual([...rows].map(r => r.cells[2].textContent), ['9점', '0점', '재응시', '미게시', '확인 불가']);
+  assert.doesNotMatch(a.$('teacher-classes').textContent, /Lesson 5-1|통과한 표현|2, 3/);
+  const button = rows[0].cells[2].querySelector('button');
+  assert.equal(a.w.document.getElementById(button.getAttribute('aria-describedby')).textContent, '학생 1');
+  button.focus(); button.click();
+  const dialog = a.$('teacher-score-dialog');
+  assert.equal(dialog.open, true);
+  assert.match(a.$('teacher-score-title').textContent, /4반 1번 학생 1/);
+  assert.match(a.$('teacher-score-result').textContent, /최종 점수: 9점/);
+  assert.match(a.$('teacher-score-result').textContent, /기준에 못 미친 표현 번호: 2, 3/);
+  assert.equal(a.w.document.activeElement, a.$('teacher-score-title'));
+  dialog.open = false; dialog.dispatchEvent(new a.w.Event('close'));
+  assert.equal(a.w.document.activeElement, button);
+  assert.equal(a.$('teacher-score-result').textContent, '');
+  rows[2].cells[2].querySelector('button').click();
+  assert.equal(a.$('teacher-score-result').textContent, '재응시');
+  assert.match(a.$('teacher-score-title').textContent, /4반 3번 학생 3/);
+  dialog.open = false; dialog.dispatchEvent(new a.w.Event('close'));
+  scores[0] = {...scores[0], final_score: 10};
+  a.$('btn-teacher-refresh').click(); await settle();
+  rows = a.$('teacher-classes').querySelectorAll('tbody tr');
+  assert.equal(rows[0].cells[2].textContent, '10점');
+});
+
 test("teacher playback request cannot start after leaving the dashboard", async (t) => {
   const pending = deferred();
   const a = app(t, { checkIn: async () => ({ ok: true, is_teacher: true }), getRecordingUrl: () => pending.promise });
@@ -638,11 +678,11 @@ test("dashboard separates optional practice completion and plays every practice 
   });
   await a.enter();
   const rows = a.w.document.querySelectorAll("tbody tr");
-  assert.equal(rows[0].cells[2].textContent, "완료");
-  assert.equal(rows[0].cells[4].textContent, "미제출");
-  assert.equal(rows[1].cells[2].textContent, "미완료");
-  assert.equal(rows[2].cells[2].textContent, "확인 불가");
-  const buttons = rows[0].cells[3].querySelectorAll("button");
+  assert.equal(rows[0].cells[3].textContent, "완료");
+  assert.equal(rows[0].cells[5].textContent, "미제출");
+  assert.equal(rows[1].cells[3].textContent, "미완료");
+  assert.equal(rows[2].cells[3].textContent, "확인 불가");
+  const buttons = rows[0].cells[4].querySelectorAll("button");
   assert.equal(buttons.length, 2);
   buttons[0].click(); await settle();
   buttons[1].click(); await settle();

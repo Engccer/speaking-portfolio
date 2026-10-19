@@ -84,6 +84,26 @@ $("entry-form").addEventListener("submit", async (e) => {
   }
 });
 
+function renderScore(result, score) {
+  result.replaceChildren();
+  const line = (text, tag = "p") => {
+    const element = document.createElement(tag);
+    element.textContent = text;
+    result.append(element);
+  };
+  if (!score) line("아직 점수가 게시되지 않았습니다.");
+  else {
+    if (score.final_score !== null) line(`최종 점수: ${score.final_score}점 (10점 만점)`);
+    if (score.note) line(score.note);
+    score.dialogues.forEach((dialogue, index) => {
+      line(`${index + 1}번째 대화: ${dialogue.title}`, "h3");
+      line(`점수: ${dialogue.score}점, 통과한 표현: ${dialogue.passed}개 (10개 중)`);
+      if (dialogue.missed) line(`기준에 못 미친 표현 번호: ${dialogue.missed}`);
+    });
+    if (score.final_score === null && !score.note) line("점수 확인 대기 중입니다.");
+  }
+}
+
 let scoreRequest = 0;
 async function showScore() {
   if (modeBusy) return;
@@ -96,23 +116,7 @@ async function showScore() {
   try {
     const score = await getStudentScore(state);
     if (request !== scoreRequest || version !== sessionVersion) return;
-    result.replaceChildren();
-    const line = (text, tag = "p") => {
-      const element = document.createElement(tag);
-      element.textContent = text;
-      result.append(element);
-    };
-    if (!score) line("아직 점수가 게시되지 않았습니다.");
-    else {
-      if (score.final_score !== null) line(`최종 점수: ${score.final_score}점 (10점 만점)`);
-      if (score.note) line(score.note);
-      score.dialogues.forEach((dialogue, index) => {
-        line(`${index + 1}번째 대화: ${dialogue.title}`, "h3");
-        line(`점수: ${dialogue.score}점, 통과한 표현: ${dialogue.passed}개 (10개 중)`);
-        if (dialogue.missed) line(`기준에 못 미친 표현 번호: ${dialogue.missed}`);
-      });
-      if (score.final_score === null && !score.note) line("점수 확인 대기 중입니다.");
-    }
+    renderScore(result, score);
     result.firstElementChild.tabIndex = -1;
     result.firstElementChild.focus();
   } catch (err) {
@@ -744,7 +748,7 @@ async function refreshTeacher() {
   try {
     const data = await getTeacherDashboard(state);
     renderTeacher(data.classes);
-    $("teacher-status").textContent = "모의 평가 완료 여부와 본 평가 제출 현황입니다.";
+    $("teacher-status").textContent = "모의 평가 완료 여부와 본 평가 제출 현황입니다. 최종 점수를 선택하면 세부사항을 확인할 수 있습니다.";
     announce("제출 현황을 불러왔습니다.");
     return true;
   } catch (err) {
@@ -807,7 +811,7 @@ function renderTeacher(classes) {
     const table = document.createElement("table");
     const caption = table.createCaption(); caption.textContent = `${cls.class}반 평가 현황`;
     const header = table.createTHead().insertRow();
-    ["번호", "이름", "모의 평가", "모의 평가 녹음", "본 평가", "본 평가 녹음", "재응시"].forEach((name) => {
+    ["번호", "이름", "최종 점수", "모의 평가", "모의 평가 녹음", "본 평가", "본 평가 녹음", "재응시"].forEach((name) => {
       const th = document.createElement("th"); th.scope = "col"; th.textContent = name; header.append(th);
     });
     const tbody = table.createTBody();
@@ -815,6 +819,30 @@ function renderTeacher(classes) {
       const row = tbody.insertRow();
       row.insertCell().textContent = student.number;
       const name = document.createElement("th"); name.scope = "row"; name.textContent = student.name; row.append(name);
+      name.id = `teacher-student-${cls.class}-${student.number}`;
+      const scoreCell = row.insertCell();
+      const score = student.published_score;
+      if (score) {
+        const scoreButton = document.createElement("button"); scoreButton.type = "button";
+        scoreButton.textContent = score.final_score !== null ? `${score.final_score}점` : (score.note || "확인 대기");
+        scoreButton.setAttribute("aria-describedby", name.id);
+        scoreButton.setAttribute("aria-haspopup", "dialog");
+        scoreButton.addEventListener("click", () => {
+          if (teacherBusy || !state.isTeacher) return;
+          stopTeacherAudio();
+          const dialog = $("teacher-score-dialog");
+          $("teacher-score-title").textContent = `${cls.class}반 ${student.number}번 ${student.name} 점수 세부사항`;
+          renderScore($("teacher-score-result"), score);
+          dialog.onclose = () => {
+            $("teacher-score-result").replaceChildren();
+            $("teacher-score-title").textContent = "점수 세부사항";
+            if (scoreButton.isConnected) scoreButton.focus();
+          };
+          dialog.showModal();
+          $("teacher-score-title").focus();
+        });
+        scoreCell.append(scoreButton);
+      } else scoreCell.textContent = score === null ? "미게시" : "확인 불가";
       const practices = student.practice_submissions;
       row.insertCell().textContent = !Array.isArray(practices) ? "확인 불가" : practices.length ? "완료" : "미완료";
       const practiceFiles = row.insertCell();
