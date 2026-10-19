@@ -1,4 +1,4 @@
-import { checkIn, downloadAudio, getClient, getTeacherDashboard, setClassOpen, getRecordingUrl, returnSubmission } from "./lib/supa.js?v=class-admission";
+import { checkIn, enterStudent, getStudentScore, downloadAudio, getClient, getTeacherDashboard, setClassOpen, getRecordingUrl, returnSubmission } from "./lib/supa.js?v=published-scores";
 import { initNumberCombobox } from "./lib/number-combobox.js";
 import { startCapture } from "./lib/recording.js";
 import { startMicMeter } from "./lib/mic-meter.js";
@@ -9,6 +9,7 @@ export const state = {
   cls: 0, num: 0, name: "", mode: "", dialogues: [], current: 0, recordings: {}, stream: null,
   submitted: false, built: null,
   entered: false, isTeacher: false, examSubmitted: false, practiceCompleted: null,
+  classOpen: true,
 };
 let sessionVersion = 0;
 let DIALOGUES = [];
@@ -33,6 +34,7 @@ const entryMessage = (r) => r.reason === "class_closed" ? closedMessage : "명�
 
 function updateParticipation(result) {
   state.examSubmitted = !!result.submitted;
+  state.classOpen = !!result.class_open;
   if (typeof result.practice_completed === "boolean") state.practiceCompleted = result.practice_completed;
 }
 
@@ -41,8 +43,11 @@ function showMode() {
   $("practice-status").textContent = state.practiceCompleted === null
     ? "모의 평가 완료 여부를 확인하지 못했습니다."
     : `모의 평가 ${state.practiceCompleted ? "완료" : "미완료"}`;
-  $("btn-exam").disabled = state.examSubmitted;
-  $("mode-note").textContent = state.examSubmitted
+  $("btn-practice").disabled = !state.classOpen;
+  $("btn-exam").disabled = state.examSubmitted || !state.classOpen;
+  $("mode-note").textContent = !state.classOpen
+    ? "평가 참여가 마감되었습니다. 내 점수는 확인할 수 있습니다."
+    : state.examSubmitted
     ? "본 평가를 이미 제출했습니다. 모의 평가만 할 수 있습니다."
     : "본 평가는 대화 2편을 녹음하고 한 번만 제출할 수 있습니다.";
   showScreen("screen-mode");
@@ -59,7 +64,7 @@ $("entry-form").addEventListener("submit", async (e) => {
   const cls = Number(f.get("cls")), num = Number(f.get("num")), name = String(f.get("name") || "").trim();
   $("entry-error").textContent = "";
   try {
-    const r = await checkIn(cls, num, name);
+    const r = await enterStudent(cls, num, name);
     if (!r.ok) { $("entry-error").textContent = entryMessage(r); announce($("entry-error").textContent); return; }
     Object.assign(state, { cls, num, name: normName(name), entered: true, isTeacher: !!r.is_teacher });
     updateParticipation(r);
@@ -79,6 +84,50 @@ $("entry-form").addEventListener("submit", async (e) => {
   }
 });
 
+let scoreRequest = 0;
+async function showScore() {
+  if (modeBusy) return;
+  const request = ++scoreRequest, version = sessionVersion;
+  const result = $("score-result");
+  $("score-greeting").textContent = `${state.cls}반 ${state.num}번 ${state.name}`;
+  result.textContent = "점수를 불러오는 중입니다.";
+  $("btn-score-retry").hidden = true;
+  showScreen("screen-score");
+  try {
+    const score = await getStudentScore(state);
+    if (request !== scoreRequest || version !== sessionVersion) return;
+    result.replaceChildren();
+    const line = (text, tag = "p") => {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      result.append(element);
+    };
+    if (!score) line("아직 점수가 게시되지 않았습니다.");
+    else {
+      if (score.final_score !== null) line(`최종 점수: ${score.final_score}점 (10점 만점)`);
+      if (score.note) line(score.note);
+      score.dialogues.forEach((dialogue, index) => {
+        line(`${index + 1}번째 대화: ${dialogue.title}`, "h3");
+        line(`점수: ${dialogue.score}점, 통과한 표현: ${dialogue.passed}개 (10개 중)`);
+        if (dialogue.missed) line(`기준에 못 미친 표현 번호: ${dialogue.missed}`);
+      });
+      if (score.final_score === null && !score.note) line("점수 확인 대기 중입니다.");
+    }
+    result.firstElementChild.tabIndex = -1;
+    result.firstElementChild.focus();
+  } catch (err) {
+    if (request !== scoreRequest || version !== sessionVersion) return;
+    result.textContent = "점수를 불러오지 못했습니다. 잠시 후 다시 시도하세요.";
+    $("btn-score-retry").hidden = false;
+    result.tabIndex = -1;
+    result.focus();
+    console.error(err);
+  }
+}
+$("btn-score").addEventListener("click", showScore);
+$("btn-score-retry").addEventListener("click", showScore);
+$("btn-score-back").addEventListener("click", () => { scoreRequest++; showMode(); $("btn-score").focus(); });
+
 async function loadDialogues() {
   if (DIALOGUES.length) return;
   DIALOGUES = await (await fetch("data/dialogues.json")).json();
@@ -90,6 +139,7 @@ async function chooseMode(mode, button = $(mode === "exam" ? "btn-exam" : "btn-p
   modeBusy = true;
   const version = sessionVersion;
   button.setAttribute("aria-disabled", "true");
+  $("btn-score").setAttribute("aria-disabled", "true");
   try {
     const r = await checkIn(state.cls, state.num, state.name);
     if (version !== sessionVersion) return;
@@ -133,6 +183,7 @@ async function chooseMode(mode, button = $(mode === "exam" ? "btn-exam" : "btn-p
   } finally {
     if (version === sessionVersion) modeBusy = false;
     button.removeAttribute("aria-disabled");
+    if (version === sessionVersion) $("btn-score").removeAttribute("aria-disabled");
   }
 }
 $("btn-practice").addEventListener("click", () => chooseMode("practice"));
@@ -421,7 +472,7 @@ function hasUnsubmittedRecording() {
   return (has || recordingBusy || micBusy) && !state.submitted;
 }
 function needsExitWarning() {
-  return (state.entered && !state.isTeacher && !state.examSubmitted) || hasUnsubmittedRecording() || submitBusy;
+  return (state.entered && state.classOpen && !state.isTeacher && !state.examSubmitted) || hasUnsubmittedRecording() || submitBusy;
 }
 window.addEventListener("beforeunload", (e) => {
   if (needsExitWarning()) { e.preventDefault(); e.returnValue = ""; }
@@ -632,6 +683,9 @@ $("btn-restart").addEventListener("click", () => {
 
 function exitStudent() {
   sessionVersion++;
+  scoreRequest++;
+  $("score-result").replaceChildren();
+  $("score-greeting").textContent = "";
   recordingRevision++;
   clearTimeout(micTimer); micTimer = null;
   micCapture?.stop(); micCapture = null;
@@ -641,6 +695,7 @@ function exitStudent() {
   $("mic-playback").pause(); $("mic-playback").hidden = true;
   if (micUrl) { URL.revokeObjectURL(micUrl); micUrl = null; }
   micBusy = recordingBusy = modeBusy = false;
+  $("btn-score").removeAttribute("aria-disabled");
   $("btn-mic-test").removeAttribute("aria-disabled");
   $("btn-play-all").disabled = false;
   $("btn-prev-dialogue").disabled = false;

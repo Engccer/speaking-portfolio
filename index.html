@@ -42,7 +42,16 @@
     <p>
       <button type="button" id="btn-practice">모의 평가 참여하기</button>
       <button type="button" id="btn-exam" disabled>본 평가 참여하기</button>
+      <button type="button" id="btn-score">내 점수 확인하기</button>
     </p>
+  </section>
+
+  <section id="screen-score" class="screen" hidden>
+    <h2 tabindex="-1">내 점수</h2>
+    <p id="score-greeting"></p>
+    <div id="score-result"></div>
+    <p><button type="button" id="btn-score-retry" hidden>점수 다시 불러오기</button>
+      <button type="button" id="btn-score-back">이전으로 돌아가기</button></p>
   </section>
 
   <section id="screen-mic" class="screen" hidden>
@@ -126,6 +135,6 @@
   </form>
 </dialog>
 
-<script type="module" src="app.js?v=assessment-flow"></script>
+<script type="module" src="app.js?v=published-scores"></script>
 </body>
 </html>

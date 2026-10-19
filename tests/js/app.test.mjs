@@ -50,6 +50,8 @@ function app(t, overrides = {}) {
     downloadAudio: async () => new Blob(),
     ...overrides,
   });
+  w.enterStudent = overrides.enterStudent || ((...args) => w.checkIn(...args));
+  w.getStudentScore = overrides.getStudentScore || (async () => null);
   w.eval(`${source}\nwindow.testing = {state, showSubmitScreen, showRecordScreen, finish, submit};`);
   w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   const $ = (id) => w.document.getElementById(id);
@@ -91,6 +93,72 @@ function microphone(a) {
   };
   return { sessions, tracks };
 }
+
+test("closed class can enter to view printed scores while assessment stays disabled", async (t) => {
+  const a = app(t, {
+    enterStudent: async () => ({ok: true, class_open: false, submitted: true, practice_completed: true}),
+    getStudentScore: async () => ({final_score: 9, note: '', dialogues: [
+      {title: 'Lesson 5-1', score: 9, passed: 8, missed: '2, 3'},
+      {title: 'Lesson 6-1', score: 9, passed: 8, missed: '1, 2'}]}),
+  });
+  await a.enter();
+  assert.equal(a.$('screen-mode').hidden, false);
+  assert.equal(a.$('btn-practice').disabled, true);
+  assert.equal(a.$('btn-exam').disabled, true);
+  a.$('btn-score').click(); await settle();
+  assert.match(a.$('score-result').textContent, /최종 점수: 9점/);
+  assert.match(a.$('score-result').textContent, /기준에 못 미친 표현 번호: 2, 3/);
+  assert.equal(a.w.document.activeElement, a.$('score-result').firstElementChild);
+  a.$('btn-score-back').click();
+  assert.equal(a.w.document.activeElement, a.$('btn-score'));
+  a.$('btn-exit').click();
+  assert.equal(a.$('score-result').textContent, '');
+});
+
+test("unpublished, retake, and network retry remain distinct from zero", async (t) => {
+  let response = null;
+  const a = app(t, {getStudentScore: async () => { if (response instanceof Error) throw response; return response; }});
+  await a.enter(); a.$('btn-score').click(); await settle();
+  assert.match(a.$('score-result').textContent, /아직 점수가 게시되지/);
+  a.$('btn-score-back').click();
+  response = {final_score: null, note: '재응시', dialogues: []};
+  a.$('btn-score').click(); await settle();
+  assert.equal(a.$('score-result').textContent, '재응시');
+  a.$('btn-score-back').click(); response = new Error('offline');
+  a.$('btn-score').click(); await settle();
+  assert.equal(a.$('btn-score-retry').hidden, false);
+  response = {final_score: 0, note: '', dialogues: []};
+  a.$('btn-score-retry').click(); await settle();
+  assert.match(a.$('score-result').textContent, /최종 점수: 0점/);
+});
+
+test("late score response cannot restore a previous student's result after exit", async (t) => {
+  const pending = deferred();
+  const a = app(t, {
+    enterStudent: async () => ({ok: true, class_open: false, submitted: false}),
+    getStudentScore: () => pending.promise,
+  });
+  await a.enter(); a.$('btn-score').click(); await settle();
+  a.$('btn-exit').click();
+  assert.equal(a.$('screen-entry').hidden, false);
+  pending.resolve({final_score: 10, note: '', dialogues: []}); await settle();
+  assert.equal(a.$('score-result').textContent, '');
+  assert.equal(a.$('screen-entry').hidden, false);
+});
+
+test("score button cannot race with an in-flight assessment entry", async (t) => {
+  const pending = deferred();
+  const a = app(t);
+  await a.enter();
+  a.w.checkIn = () => pending.promise;
+  a.$('btn-practice').click(); await settle();
+  assert.equal(a.$('btn-score').getAttribute('aria-disabled'), 'true');
+  a.$('btn-score').click();
+  assert.equal(a.$('screen-score').hidden, true);
+  pending.resolve({ok: true, class_open: true, submitted: false}); await settle();
+  assert.equal(a.$('screen-mic').hidden, false);
+  assert.equal(a.$('btn-score').hasAttribute('aria-disabled'), false);
+});
 
 test("mobile stop saves without metadata events, keeps the same focused control and releases the mic", async (t) => {
   const a = app(t), { sessions, tracks } = microphone(a);
@@ -466,12 +534,12 @@ test("practice-only completion still warns and can directly start the exam", asy
 });
 
 test("reentry restores server practice completion without making practice mandatory", async (t) => {
-  const a = app(t, { checkIn: async () => ({ ok: true, submitted: false, practice_completed: true }) });
+  const a = app(t, { checkIn: async () => ({ ok: true, class_open: true, submitted: false, practice_completed: true }) });
   await a.enter();
   assert.equal(a.$("practice-status").textContent, "모의 평가 완료");
   assert.equal(a.$("btn-exam").disabled, false);
   confirmExit(a);
-  a.w.checkIn = async () => ({ ok: true, submitted: false, practice_completed: false });
+  a.w.checkIn = async () => ({ ok: true, class_open: true, submitted: false, practice_completed: false });
   await a.enter();
   assert.equal(a.$("practice-status").textContent, "모의 평가 미완료");
   a.$("btn-exam").click(); await settle();

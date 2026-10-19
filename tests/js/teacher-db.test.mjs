@@ -59,6 +59,35 @@ before(async () => {
 });
 after(async () => { await db.close(); });
 
+test("마감 중 점수 입장은 가능하지만 평가 check_in은 닫힘을 유지한다", async () => {
+  const result = await rpc("student_portal", student);
+  assert.equal(result.ok, true);
+  assert.equal(result.class_open, false);
+  assert.equal((await rpc("check_in", student)).ok, false);
+  assert.equal((await rpc("student_portal", [1, 1, "틀린 이름"])).ok, false);
+});
+
+test("점수 RPC는 이름을 재검증하며 자신의 게시 결과만 반환한다", async () => {
+  assert.equal(await rpc("student_score", student), null);
+  await db.exec(`reset role;
+    insert into public.published_scores(class,number,final_score,dialogues,note) values
+      (1,1,9,'[{"title":"Lesson 5-1","passed":8,"missed":"2, 3","score":9}]',''),
+      (1,2,null,'[]','재응시');
+    set role anon;`);
+  const score = await rpc("student_score", [1, 1, "학 생 예시"]);
+  assert.equal(score.final_score, 9);
+  assert.equal(score.dialogues.length, 1);
+  assert.equal(score.name, undefined);
+  assert.equal((await rpc("student_score", [1,2,"학생 둘"])).note, "재응시");
+  await assert.rejects(() => rpc("student_score", [1,2,"학생 예시"]), /반, 번호, 이름/);
+  await assert.rejects(() => rpc("student_score", [1,1,""]), /반, 번호, 이름/);
+  await assert.rejects(() => db.query("select * from public.published_scores"), /permission denied/);
+  await assert.rejects(() => db.query("update public.published_scores set final_score=10"), /permission denied/);
+  await db.exec("reset role; set role authenticated;");
+  await assert.rejects(() => db.query("select * from public.published_scores"), /permission denied/);
+  await db.exec("reset role; set role anon;");
+});
+
 test("체크인은 DB 교사 표시와 정규화된 이름을 확인한다", async () => {
   assert.equal((await rpc("check_in", [1, 40, "교사　 예시"])).is_teacher, true);
   assert.equal((await rpc("check_in", student)).is_teacher, false);
