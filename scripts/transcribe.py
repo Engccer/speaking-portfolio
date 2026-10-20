@@ -1,5 +1,8 @@
 """폴더의 WAV를 ElevenLabs Scribe로 전사한다. 현재 음원과 일치하는 캐시를 재사용한다.
 
+Scribe는 정상 음원에도 가끔 빈 결과나 다국어 무의미 문자열을 낸다. 그런 결과는 다시 호출하고,
+끝까지 의심스러우면 단어가 가장 많은 결과를 `_suspect: true`로 저장해 교사 확인 대상으로 남긴다.
+
 사용: python scripts/transcribe.py <폴더>
 """
 import json
@@ -12,6 +15,8 @@ from pathlib import Path
 import requests
 
 URL = "https://api.elevenlabs.io/v1/speech-to-text"
+MAX_ATTEMPTS = 3
+MIN_WORDS_PER_SEC = 0.8
 
 
 def api_key():
@@ -65,6 +70,22 @@ def cached_transcript(wav: Path) -> dict | None:
     return None
 
 
+def word_count(data: dict) -> int:
+    return sum(1 for w in data.get("words", []) if w.get("type", "word") == "word")
+
+
+def is_hangul(ch: str) -> bool:
+    return "가" <= ch <= "힣" or "ᄀ" <= ch <= "ᇿ" or "㄰" <= ch <= "㆏"
+
+
+def suspicious(data: dict) -> bool:
+    """빈 전사, 말하기 속도로 볼 수 없는 단어 밀도, 라틴·한글 밖 글자를 실패로 본다."""
+    if any(ch.isalpha() and ord(ch) > 0x24F and not is_hangul(ch) for ch in data.get("text", "")):
+        return True
+    duration = data.get("audio_duration_secs") or 0
+    return word_count(data) < max(1, MIN_WORDS_PER_SEC * duration)
+
+
 def transcribe_file(wav: Path) -> dict | None:
     if recording_metadata(wav).get("returned"):
         return None
@@ -72,7 +93,15 @@ def transcribe_file(wav: Path) -> dict | None:
     if cached is not None:
         return cached
     digest = hashlib.sha256(wav.read_bytes()).hexdigest()
-    data = call_scribe(wav)
+    results = []
+    for _ in range(MAX_ATTEMPTS):
+        data = call_scribe(wav)
+        if not suspicious(data):
+            break
+        results.append(data)
+    else:
+        data = max(results, key=word_count)
+        data["_suspect"] = True
     data["_source_sha256"] = digest
     cache = wav.with_name(wav.stem + ".scribe.json")
     cache.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -88,10 +117,10 @@ def main():
     for w in wavs:
         had = cached_transcript(w) is not None
         try:
-            transcribe_file(w)
+            data = transcribe_file(w)
             done += 1
             called += 0 if had else 1
-            print(("캐시 " if had else "전사 ") + w.name)
+            print(("캐시 " if had else "전사 ") + w.name + (" (전사 의심, 녹음 확인 필요)" if data and (data.get("_suspect") or suspicious(data)) else ""))
         except Exception as e:
             print("실패", w.name, e)
     print(f"{done}/{len(wavs)} 완료, API 호출 {called}회")
